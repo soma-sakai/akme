@@ -39,3 +39,4 @@ npm run dev
 - `/src/lib` - 外部サービス連携
 - `/src/data` - モックデータ
 - `/src/types` - 型定義
+# akamee
