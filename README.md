@@ -39,4 +39,29 @@ npm run dev
 - `/src/lib` - 外部サービス連携
 - `/src/data` - モックデータ
 - `/src/types` - 型定義
-# akamee
+
+## デプロイ
+
+このプロジェクトはVercelにデプロイされています。デプロイには以下の手順に従ってください：
+
+```bash
+# ビルド
+npm run build
+
+# 本番環境での実行
+npm start
+```
+
+### Vercelデプロイ時の注意点
+
+- `next.config.js`でESLintとTypeScriptのエラーを無視する設定を追加しています
+- `vercel.json`にはデプロイ設定が含まれています
+- 未使用のインポート（useEffect, useStateなど）はすべて削除済みです
+
+## トラブルシューティング
+
+ビルドエラーが発生した場合は、以下を確認してください：
+
+1. 未使用のインポートや変数がないか
+2. TypeScriptの型エラーがないか
+3. ESLintの警告がビルドを中断していないか
