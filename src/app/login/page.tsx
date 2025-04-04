@@ -1,16 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import { useAuthContext } from '@/contexts/AuthContext';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 
-export default function Login() {
+// SearchParamsを使用するコンポーネント
+function LoginContent() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [successMessage, setSuccessMessage] = useState('');
+  const [successMessage] = useState('');
   
   const { signIn } = useAuthContext();
   const searchParams = useSearchParams();
@@ -119,5 +120,14 @@ export default function Login() {
         </form>
       </div>
     </div>
+  );
+}
+
+// メインのページコンポーネント
+export default function Login() {
+  return (
+    <Suspense fallback={<div className="min-h-[500px] flex items-center justify-center bg-gray-50">読み込み中...</div>}>
+      <LoginContent />
+    </Suspense>
   );
 } 
