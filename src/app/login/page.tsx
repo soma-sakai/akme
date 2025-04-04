@@ -11,7 +11,7 @@ function LoginContent() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [successMessage] = useState('');
+  const successMessage = '';
   
   const { signIn } = useAuthContext();
   const searchParams = useSearchParams();
