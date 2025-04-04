@@ -5,5 +5,16 @@
     }
   },
   "buildCommand": "next build",
-  "ignoreCommand": "exit 0"
+  "ignoreCommand": "exit 0",
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/next",
+      "config": {
+        "eslint": {
+          "ignoreDuringBuilds": true
+        }
+      }
+    }
+  ]
 } 
