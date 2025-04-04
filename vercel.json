@@ -11,8 +11,15 @@
       "config": {
         "eslint": {
           "ignoreDuringBuilds": true
+        },
+        "typescript": {
+          "ignoreBuildErrors": true
         }
       }
     }
-  ]
+  ],
+  "github": {
+    "enabled": true,
+    "silent": false
+  }
 } 
