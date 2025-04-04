@@ -1,5 +1,6 @@
 'use client';
 
+// useEffectは使用していないため削除済み
 import { useState } from 'react';
 import { products } from '@/data/products';
 import ProductCard from '@/components/ProductCard';

@@ -1,5 +1,6 @@
 'use client';
 
+// useStateとuseEffectは使用していないため削除済み
 import React, { createContext, useContext, ReactNode } from 'react';
 import { useAuth, UserProfile } from '@/hooks/useAuth';
 

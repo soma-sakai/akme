@@ -1,5 +1,6 @@
 'use client';
 
+// useEffectは使用していないため削除済み
 import { useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
