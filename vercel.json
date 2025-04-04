@@ -4,8 +4,6 @@
       "main": true
     }
   },
-  "buildCommand": "next build",
-  "ignoreCommand": "exit 0",
   "builds": [
     {
       "src": "package.json",
