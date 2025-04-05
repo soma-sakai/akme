@@ -1,38 +1,46 @@
 import { NextResponse } from 'next/server';
-import Stripe from 'stripe';
+import type { Stripe } from 'stripe';
 
-// Stripe APIの初期化（環境変数がある場合のみ）
-const getStripeInstance = () => {
-  const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-
-  if (!stripeSecretKey) {
-    console.error('Stripe Secret Key is not configured');
-    return null;
-  }
-
-  return new Stripe(stripeSecretKey, {
-    apiVersion: '2023-10-16' as Stripe.LatestApiVersion,
-  });
-};
-
+// APIハンドラー
 export async function POST(req: Request) {
   try {
-    // リクエストごとに新しいStripeインスタンスを作成
-    const stripe = getStripeInstance();
+    // 遅延インポートでStripeモジュールを読み込む (Vercelデプロイでの問題回避策)
+    const { default: StripeSDK } = await import('stripe');
     
-    // Stripeが初期化されていない場合はエラーを返す
-    if (!stripe) {
+    // Stripeの初期化
+    const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+    if (!stripeSecretKey) {
+      console.error('[API] Stripe Secret Key is not configured');
       return NextResponse.json(
         { error: 'Stripe APIキーが設定されていません。環境変数を確認してください。' },
         { status: 500 }
       );
     }
 
-    const { items, purchaseType } = await req.json();
+    // APIバージョンを動的に扱うことでエラーを避ける
+    const stripe = new StripeSDK(stripeSecretKey, {
+      apiVersion: '2023-10-16' as any,
+    });
+
+    // リクエストボディの解析
+    let items;
+    let purchaseType;
     
-    if (!items || items.length === 0) {
+    try {
+      const body = await req.json();
+      items = body.items;
+      purchaseType = body.purchaseType;
+      
+      if (!items || items.length === 0) {
+        return NextResponse.json(
+          { error: '商品情報が提供されていません' },
+          { status: 400 }
+        );
+      }
+    } catch (error) {
+      console.error('[API] JSON parsing error:', error);
       return NextResponse.json(
-        { error: '商品情報が提供されていません' },
+        { error: 'リクエストの解析に失敗しました' },
         { status: 400 }
       );
     }
@@ -41,13 +49,13 @@ export async function POST(req: Request) {
     const lineItems = items.map((item: any) => {
       // 画像URLが絶対URLであることを確認
       const imageUrls: string[] = [];
-      if (item.images && item.images.length > 0) {
+      if (item.images && Array.isArray(item.images) && item.images.length > 0) {
         // 画像URLが有効かチェック
         const firstImage = item.images[0];
         if (typeof firstImage === 'string' && firstImage.trim() !== '') {
           // URLが相対パスの場合は絶対URLに変換
           if (firstImage.startsWith('/')) {
-            const origin = req.headers.get('origin') || 'http://localhost:3000';
+            const origin = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
             imageUrls.push(`${origin}${firstImage}`);
           } else if (firstImage.startsWith('http')) {
             imageUrls.push(firstImage);
@@ -59,42 +67,27 @@ export async function POST(req: Request) {
         price_data: {
           currency: 'jpy',
           product_data: {
-            name: item.name,
+            name: item.name || '商品',
             description: item.description || '',
             images: imageUrls.length > 0 ? imageUrls : [],
           },
-          unit_amount: item.price,
+          unit_amount: item.price || 0,
         },
         quantity: item.quantity || 1,
       };
     });
 
-    // オリジンURLを取得
-    let origin = req.headers.get('origin');
-    if (!origin) {
-      // Vercelのデプロイでリクエストヘッダーからoriginを取得できない場合の対策
-      const referer = req.headers.get('referer');
-      if (referer) {
-        try {
-          const url = new URL(referer);
-          origin = `${url.protocol}//${url.host}`;
-        } catch (e) {
-          origin = 'http://localhost:3000';
-        }
-      } else {
-        origin = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
-      }
-    }
-
-    console.log('Origin for redirect URLs:', origin);
+    // サイトのベースURLを取得
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+    console.log('[API] Using site URL for redirects:', siteUrl);
 
     // チェックアウトセッションの作成
-    const sessionConfig: Stripe.Checkout.SessionCreateParams = {
+    const sessionConfig: any = {
       payment_method_types: ['card'],
-      line_items: lineItems as Stripe.Checkout.SessionCreateParams.LineItem[],
-      mode: (purchaseType === 'subscription' ? 'subscription' : 'payment') as Stripe.Checkout.SessionCreateParams.Mode,
-      success_url: `${origin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/checkout/cancel`,
+      line_items: lineItems,
+      mode: purchaseType === 'subscription' ? 'subscription' : 'payment',
+      success_url: `${siteUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${siteUrl}/checkout/cancel`,
       billing_address_collection: 'auto',
       shipping_address_collection: {
         allowed_countries: ['JP'],
@@ -102,21 +95,23 @@ export async function POST(req: Request) {
       locale: 'ja',
     };
 
-    console.log('Creating checkout session with config:', JSON.stringify(sessionConfig, null, 2));
-    
-    const session = await stripe.checkout.sessions.create(sessionConfig);
-
-    console.log('Session created:', session.id);
-    
-    return NextResponse.json({ sessionId: session.id });
+    try {
+      const session = await stripe.checkout.sessions.create(sessionConfig);
+      console.log('[API] Session created:', session.id);
+      
+      return NextResponse.json({ sessionId: session.id });
+    } catch (stripeError: any) {
+      console.error('[API] Stripe session creation error:', stripeError);
+      return NextResponse.json(
+        { error: `Stripeセッション作成エラー: ${stripeError.message || ''}` },
+        { status: 500 }
+      );
+    }
   } catch (error: any) {
-    console.error('Stripe API error:', error);
-    
-    // エラーメッセージをより具体的に
-    const errorMessage = error.message || '決済処理中にエラーが発生しました';
+    console.error('[API] Unhandled error:', error);
     
     return NextResponse.json(
-      { error: errorMessage },
+      { error: '決済処理中に予期せぬエラーが発生しました' },
       { status: 500 }
     );
   }

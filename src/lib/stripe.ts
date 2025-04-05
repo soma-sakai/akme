@@ -12,22 +12,47 @@ export const getStripe = async () => {
     return null;
   }
 
+  if (stripePromise) {
+    return stripePromise;
+  }
+
   const stripePublicKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
   
-  if (!stripePromise && stripePublicKey) {
-    try {
-      console.log('Stripe初期化開始');
-      stripePromise = loadStripe(stripePublicKey);
-      console.log('Stripe初期化完了');
-      return await stripePromise;
-    } catch (error) {
-      console.error('Stripe初期化エラー:', error);
+  if (!stripePublicKey) {
+    console.error('Stripe公開鍵が設定されていません。環境変数を確認してください。');
+    return null;
+  }
+  
+  try {
+    console.log('Stripe初期化開始: 鍵の先頭4文字 = ' + stripePublicKey.substring(0, 4) + '...');
+    stripePromise = loadStripe(stripePublicKey);
+    
+    // インスタンスを実際に解決して確認
+    const stripeInstance = await stripePromise;
+    if (stripeInstance) {
+      console.log('Stripe初期化完了: インスタンスが正常に作成されました');
+      return stripeInstance;
+    } else {
+      console.error('Stripe初期化失敗: インスタンスがnullです');
+      stripePromise = null;
       return null;
     }
+  } catch (error) {
+    console.error('Stripe初期化エラー:', error);
+    stripePromise = null;
+    return null;
   }
-  return stripePromise;
 };
 
 // Stripe公開鍵が設定されているかどうかをチェック (クライアントサイドのみ)
-export const hasStripeConfig = typeof window !== 'undefined' ? 
-  !!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY : false; 
+export const checkStripeConfig = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  
+  try {
+    const key = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+    return !!key && key.length > 0;
+  } catch (e) {
+    console.error('環境変数チェックエラー:', e);
+    return false;
+  }
+}; 

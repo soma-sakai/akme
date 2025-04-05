@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { products } from '@/data/products';
-import { getStripe, hasStripeConfig } from '@/lib/stripe';
+import { getStripe, checkStripeConfig } from '@/lib/stripe';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useParams } from 'next/navigation';
 
@@ -21,8 +21,24 @@ export default function ProductDetail() {
   
   // 環境変数チェックをクライアントサイドで行う
   useEffect(() => {
-    // クライアントサイドでStripe設定が利用可能かチェック
-    setStripeAvailable(!!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
+    // Stripe設定が利用可能かチェック
+    const checkStripe = () => {
+      try {
+        const isAvailable = checkStripeConfig();
+        if (isAvailable) {
+          console.log('Stripe設定を検出しました');
+          setStripeAvailable(true);
+        } else {
+          console.warn('Stripe公開鍵が設定されていません');
+          setStripeAvailable(false);
+        }
+      } catch (err) {
+        console.error('環境変数チェックエラー:', err);
+        setStripeAvailable(false);
+      }
+    };
+    
+    checkStripe();
   }, []);
   
   // 商品情報を取得
@@ -72,10 +88,15 @@ export default function ProductDetail() {
       // 商品画像のパスを絶対URLに変換
       const productImages = product.images.map(img => {
         if (img.startsWith('/')) {
-          return `${window.location.origin}${img}`;
+          // 環境変数からサイトURLを取得、なければwindow.locationを使用
+          const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 
+                        (typeof window !== 'undefined' ? window.location.origin : '');
+          return `${baseUrl}${img}`;
         }
         return img;
       });
+      
+      console.log('決済処理を開始します...');
       
       // Stripeのチェックアウトセッションを作成するAPIを呼び出す
       const response = await fetch('/api/create-checkout-session', {
@@ -100,8 +121,16 @@ export default function ProductDetail() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || '決済セッションの作成に失敗しました');
+        let errorMessage = '決済セッションの作成に失敗しました';
+        try {
+          const errorData = await response.json();
+          if (errorData && errorData.error) {
+            errorMessage = errorData.error;
+          }
+        } catch (err) {
+          // JSONのパースに失敗した場合はデフォルトのエラーメッセージを使用
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
@@ -109,24 +138,27 @@ export default function ProductDetail() {
         throw new Error('セッションIDが取得できませんでした');
       }
       
+      console.log('セッションID取得完了:', data.sessionId);
+      console.log('Stripe初期化を開始します...');
+      
       // Stripeのチェックアウトページに遷移
       const stripe = await getStripe();
       if (!stripe) {
         throw new Error('Stripeの初期化に失敗しました。ブラウザの設定を確認してください。');
       }
       
-      console.log('セッションID:', data.sessionId); // デバッグ用
+      console.log('Stripe初期化完了、チェックアウトページへリダイレクトします...');
       
-      const { error } = await stripe.redirectToCheckout({
+      const result = await stripe.redirectToCheckout({
         sessionId: data.sessionId,
       });
       
-      if (error) {
-        console.error('リダイレクトエラー:', error);
-        throw new Error(error.message || 'チェックアウトページへのリダイレクトに失敗しました');
+      if (result.error) {
+        console.error('リダイレクトエラー:', result.error);
+        throw new Error(result.error.message || 'チェックアウトページへのリダイレクトに失敗しました');
       }
     } catch (error: any) {
-      console.error('Checkout error:', error);
+      console.error('決済エラー:', error);
       setError(`決済処理中にエラーが発生しました: ${error.message || ''}`);
       setIsLoading(false);
     }
