@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 
-export default function CheckoutSuccess() {
+// SearchParamsを使用するコンポーネントを分離
+function SuccessContent() {
   const [loading, setLoading] = useState(true);
   const [orderDetails, setOrderDetails] = useState<any>(null);
   const searchParams = useSearchParams();
@@ -64,5 +65,20 @@ export default function CheckoutSuccess() {
         </div>
       </div>
     </div>
+  );
+}
+
+// Suspenseでラップした親コンポーネント
+export default function CheckoutSuccess() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-[500px] flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-lg">読み込み中...</p>
+        </div>
+      </div>
+    }>
+      <SuccessContent />
+    </Suspense>
   );
 } 

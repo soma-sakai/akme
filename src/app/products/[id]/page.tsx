@@ -9,6 +9,9 @@ import { getStripe } from '@/lib/stripe';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useParams } from 'next/navigation';
 
+// Stripe APIキーが設定されているかチェック
+const hasStripeConfig = !!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+
 export default function ProductDetail() {
   const params = useParams();
   const id = params.id as string;
@@ -53,6 +56,12 @@ export default function ProductDetail() {
       return;
     }
     
+    // Stripe設定がない場合はエラーメッセージを表示して処理を中断
+    if (!hasStripeConfig) {
+      setError('決済システムの設定が完了していません。管理者にお問い合わせください。');
+      return;
+    }
+    
     setIsLoading(true);
     setError('');
     
@@ -67,8 +76,8 @@ export default function ProductDetail() {
           items: [
             {
               name: product.name,
-              description: product.description,
-              images: product.images,
+              description: product.description || '',
+              images: product.images && product.images.length > 0 ? product.images : [],
               price: purchaseType === 'subscription' && product.subscriptionPrice 
                 ? product.subscriptionPrice 
                 : product.price,
@@ -77,6 +86,11 @@ export default function ProductDetail() {
           purchaseType,
         }),
       });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || '決済セッションの作成に失敗しました');
+      }
 
       const { sessionId, error: apiError } = await response.json();
       
@@ -87,7 +101,7 @@ export default function ProductDetail() {
       // Stripeのチェックアウトページに遷移
       const stripe = await getStripe();
       if (!stripe) {
-        throw new Error('Stripeの初期化に失敗しました。');
+        throw new Error('Stripeの初期化に失敗しました。ブラウザの設定を確認してください。');
       }
       
       const { error } = await stripe.redirectToCheckout({
@@ -97,8 +111,8 @@ export default function ProductDetail() {
       if (error) {
         throw error;
       }
-    } catch (error) {
-      setError('決済処理中にエラーが発生しました。');
+    } catch (error: any) {
+      setError(`決済処理中にエラーが発生しました: ${error.message || ''}`);
       console.error('Checkout error:', error);
       setIsLoading(false);
     }
