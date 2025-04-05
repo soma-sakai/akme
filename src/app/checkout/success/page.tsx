@@ -8,22 +8,71 @@ import { useSearchParams } from 'next/navigation';
 function SuccessContent() {
   const [loading, setLoading] = useState(true);
   const [orderDetails, setOrderDetails] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
   const searchParams = useSearchParams();
-  const sessionId = searchParams.get('session_id');
+  const sessionId = searchParams ? searchParams.get('session_id') : null;
 
   useEffect(() => {
-    // セッションIDが存在する場合は注文詳細を取得
-    if (sessionId) {
-      setLoading(false);
-      // 実際のプロジェクトでは、ここでAPIを呼び出して注文詳細を取得することもできます
-      setOrderDetails({
-        id: Math.floor(Math.random() * 1000000),
-        date: new Date().toLocaleDateString('ja-JP')
-      });
-    } else {
-      setLoading(false);
-    }
+    const getOrderDetails = async () => {
+      try {
+        // セッションIDが存在する場合は注文詳細を取得
+        if (sessionId) {
+          console.log('セッションID:', sessionId);
+          
+          // 実際のプロジェクトでは、ここでAPIを呼び出して注文詳細を取得することもできます
+          // 例: APIエンドポイントから注文詳細を取得
+          // const response = await fetch(`/api/orders/session/${sessionId}`);
+          // const data = await response.json();
+          
+          // デモ用の注文詳細
+          setOrderDetails({
+            id: sessionId.slice(-6), // セッションIDの最後の6文字を注文番号として使用
+            date: new Date().toLocaleDateString('ja-JP'),
+            total: '¥2,500', // 実際には計算された値を使用
+          });
+          
+          setLoading(false);
+        } else {
+          console.warn('セッションIDが見つかりません');
+          setError('注文情報が見つかりませんでした。');
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error('注文詳細取得エラー:', err);
+        setError('注文情報の取得中にエラーが発生しました。');
+        setLoading(false);
+      }
+    };
+
+    getOrderDetails();
   }, [sessionId]);
+
+  if (error) {
+    return (
+      <div className="min-h-[500px] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gray-50">
+        <div className="max-w-md w-full space-y-8 bg-white p-10 rounded-lg shadow-md">
+          <div className="text-center">
+            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
+              <svg className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </div>
+            <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+              エラーが発生しました
+            </h2>
+            <p className="mt-2 text-center text-sm text-gray-600">
+              {error}
+            </p>
+            <div className="mt-6">
+              <Link href="/products" className="font-medium text-primary hover:text-indigo-500">
+                ショッピングを続ける
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-[500px] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gray-50">
@@ -54,6 +103,11 @@ function SuccessContent() {
               <p className="mt-1 text-sm text-gray-600">
                 日付: {orderDetails.date}
               </p>
+              {orderDetails.total && (
+                <p className="mt-1 text-sm text-gray-600">
+                  合計: {orderDetails.total}
+                </p>
+              )}
             </div>
           ) : null}
           

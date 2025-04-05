@@ -9,7 +9,18 @@ let stripePromise: Promise<Stripe | null> | null = null;
 // Stripeインスタンスを取得するための関数
 export const getStripe = async () => {
   if (!stripePromise && stripePublicKey) {
-    stripePromise = loadStripe(stripePublicKey);
+    try {
+      console.log('Stripe初期化開始');
+      stripePromise = loadStripe(stripePublicKey);
+      console.log('Stripe初期化完了');
+      return await stripePromise;
+    } catch (error) {
+      console.error('Stripe初期化エラー:', error);
+      return null;
+    }
   }
   return stripePromise;
-}; 
+};
+
+// Stripe公開鍵が設定されているかどうかをチェック
+export const hasStripeConfig = !!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY; 
