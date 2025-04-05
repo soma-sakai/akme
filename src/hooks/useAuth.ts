@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { supabase, isSupabaseAvailable } from '@/lib/supabase';
 
 // ユーザー情報の型定義
 export type UserProfile = {
@@ -18,14 +18,29 @@ export type UserProfile = {
 export const useAuth = () => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [supabaseAvailable, setSupabaseAvailable] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
+    // Supabaseが利用可能かチェック
+    const available = isSupabaseAvailable();
+    setSupabaseAvailable(available);
+    
+    if (!available) {
+      console.error('Supabaseクライアントが初期化されていません。環境変数を確認してください。');
+      setLoading(false);
+      return;
+    }
+
     // Supabaseからセッション情報を取得
     const getSession = async () => {
       setLoading(true);
       
       try {
+        if (!supabase) {
+          throw new Error('Supabaseクライアントが利用できません');
+        }
+        
         const { data: { session } } = await supabase.auth.getSession();
         
         if (session?.user) {
@@ -45,6 +60,9 @@ export const useAuth = () => {
     };
 
     getSession();
+
+    // Supabaseが利用できない場合は監視設定をスキップ
+    if (!supabase) return;
 
     // 認証状態変更監視
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -69,6 +87,13 @@ export const useAuth = () => {
   }, []);
 
   const signUp = async (email: string, password: string, name: string, address: string) => {
+    if (!supabaseAvailable || !supabase) {
+      return { 
+        success: false, 
+        error: '認証サービスが利用できません。環境設定を確認してください。' 
+      };
+    }
+    
     try {
       // メール確認なしの直接サインアップ
       const { data, error } = await supabase.auth.signUp({
@@ -117,6 +142,13 @@ export const useAuth = () => {
   };
 
   const signIn = async (email: string, password: string) => {
+    if (!supabaseAvailable || !supabase) {
+      return { 
+        success: false, 
+        error: '認証サービスが利用できません。環境設定を確認してください。' 
+      };
+    }
+    
     try {
       // パスワードでログイン
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -171,6 +203,13 @@ export const useAuth = () => {
   };
 
   const signOut = async () => {
+    if (!supabaseAvailable || !supabase) {
+      return { 
+        success: false, 
+        error: '認証サービスが利用できません。環境設定を確認してください。' 
+      };
+    }
+    
     try {
       const { error } = await supabase.auth.signOut();
       
@@ -192,6 +231,12 @@ export const useAuth = () => {
 
   const updateProfile = async (profile: Partial<UserProfile>) => {
     if (!user) return { success: false, error: 'ユーザーが認証されていません' };
+    if (!supabaseAvailable || !supabase) {
+      return { 
+        success: false, 
+        error: '認証サービスが利用できません。環境設定を確認してください。' 
+      };
+    }
 
     try {
       // ローカルストレージに保存
