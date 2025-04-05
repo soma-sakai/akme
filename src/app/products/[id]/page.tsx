@@ -57,34 +57,46 @@ export default function ProductDetail() {
     setError('');
     
     try {
-      // ここでは簡易的にフロントエンドでStripeの初期化をしていますが
-      // 実際のプロジェクトではバックエンドAPIを使用して
-      // セキュアにチェックアウトセッションを作成する必要があります
-      const stripe = await getStripe();
+      // Stripeのチェックアウトセッションを作成するAPIを呼び出す
+      const response = await fetch('/api/create-checkout-session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          items: [
+            {
+              name: product.name,
+              description: product.description,
+              images: product.images,
+              price: purchaseType === 'subscription' && product.subscriptionPrice 
+                ? product.subscriptionPrice 
+                : product.price,
+            }
+          ],
+          purchaseType,
+        }),
+      });
+
+      const { sessionId, error: apiError } = await response.json();
       
+      if (apiError) {
+        throw new Error(apiError);
+      }
+      
+      // Stripeのチェックアウトページに遷移
+      const stripe = await getStripe();
       if (!stripe) {
         throw new Error('Stripeの初期化に失敗しました。');
       }
       
-      // モックのチェックアウト処理
-      // 実際には、バックエンドAPIを呼び出してチェックアウトセッションIDを取得します
-      // const { error } = await stripe.redirectToCheckout({
-      //   lineItems: [{ price: 'price_id_here', quantity: 1 }],
-      //   mode: purchaseType === 'one-time' ? 'payment' : 'subscription',
-      //   successUrl: window.location.origin + '/checkout/success',
-      //   cancelUrl: window.location.origin + '/checkout/cancel',
-      // });
+      const { error } = await stripe.redirectToCheckout({
+        sessionId,
+      });
       
-      // if (error) {
-      //   throw error;
-      // }
-      
-      // モック用にエラーステートなしでローディングだけ表示
-      setTimeout(() => {
-        alert('実際のStripe連携時は、ここでStripeの支払いページに遷移します。');
-        setIsLoading(false);
-      }, 1000);
-      
+      if (error) {
+        throw error;
+      }
     } catch (error) {
       setError('決済処理中にエラーが発生しました。');
       console.error('Checkout error:', error);
