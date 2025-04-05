@@ -1,0 +1,15 @@
+# Node modules
+node_modules
+
+# Next.js build output
+.next
+out
+
+# デバッグログ
+*.log
+
+# ESLintの警告を無視
+!.eslintrc.json
+!next.config.js
+!vercel.json
+!.env.production 
