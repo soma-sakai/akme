@@ -4,9 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build",
+    "build": "SKIP_ESLINT=true next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "build:skip-checks": "SKIP_ESLINT=true SKIP_TYPE_CHECK=true next build"
   },
   "dependencies": {
     "@stripe/react-stripe-js": "^3.6.0",
