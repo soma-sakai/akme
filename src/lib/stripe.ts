@@ -1,13 +1,19 @@
 import { loadStripe, Stripe } from '@stripe/stripe-js';
 
-// 環境変数からStripeの公開鍵を取得
-const stripePublicKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
-
+// クライアントサイドでのみ実行されるように修正
 // Stripe Promise インスタンスをキャッシュ
 let stripePromise: Promise<Stripe | null> | null = null;
 
 // Stripeインスタンスを取得するための関数
 export const getStripe = async () => {
+  if (typeof window === 'undefined') {
+    // サーバーサイドでは実行しない
+    console.warn('getStripe was called on the server side');
+    return null;
+  }
+
+  const stripePublicKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+  
   if (!stripePromise && stripePublicKey) {
     try {
       console.log('Stripe初期化開始');
@@ -22,5 +28,6 @@ export const getStripe = async () => {
   return stripePromise;
 };
 
-// Stripe公開鍵が設定されているかどうかをチェック
-export const hasStripeConfig = !!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY; 
+// Stripe公開鍵が設定されているかどうかをチェック (クライアントサイドのみ)
+export const hasStripeConfig = typeof window !== 'undefined' ? 
+  !!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY : false; 

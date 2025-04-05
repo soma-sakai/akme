@@ -2,17 +2,24 @@ import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 
 // Stripe APIの初期化（環境変数がある場合のみ）
-const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-let stripe: Stripe | null = null;
+const getStripeInstance = () => {
+  const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 
-if (stripeSecretKey) {
-  stripe = new Stripe(stripeSecretKey, {
+  if (!stripeSecretKey) {
+    console.error('Stripe Secret Key is not configured');
+    return null;
+  }
+
+  return new Stripe(stripeSecretKey, {
     apiVersion: '2023-10-16' as Stripe.LatestApiVersion,
   });
-}
+};
 
 export async function POST(req: Request) {
   try {
+    // リクエストごとに新しいStripeインスタンスを作成
+    const stripe = getStripeInstance();
+    
     // Stripeが初期化されていない場合はエラーを返す
     if (!stripe) {
       return NextResponse.json(
@@ -63,13 +70,29 @@ export async function POST(req: Request) {
     });
 
     // オリジンURLを取得
-    const origin = req.headers.get('origin') || 'http://localhost:3000';
+    let origin = req.headers.get('origin');
+    if (!origin) {
+      // Vercelのデプロイでリクエストヘッダーからoriginを取得できない場合の対策
+      const referer = req.headers.get('referer');
+      if (referer) {
+        try {
+          const url = new URL(referer);
+          origin = `${url.protocol}//${url.host}`;
+        } catch (e) {
+          origin = 'http://localhost:3000';
+        }
+      } else {
+        origin = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+      }
+    }
+
+    console.log('Origin for redirect URLs:', origin);
 
     // チェックアウトセッションの作成
-    const session = await stripe.checkout.sessions.create({
+    const sessionConfig: Stripe.Checkout.SessionCreateParams = {
       payment_method_types: ['card'],
-      line_items: lineItems,
-      mode: purchaseType === 'subscription' ? 'subscription' : 'payment',
+      line_items: lineItems as Stripe.Checkout.SessionCreateParams.LineItem[],
+      mode: (purchaseType === 'subscription' ? 'subscription' : 'payment') as Stripe.Checkout.SessionCreateParams.Mode,
       success_url: `${origin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/checkout/cancel`,
       billing_address_collection: 'auto',
@@ -77,8 +100,14 @@ export async function POST(req: Request) {
         allowed_countries: ['JP'],
       },
       locale: 'ja',
-    });
+    };
 
+    console.log('Creating checkout session with config:', JSON.stringify(sessionConfig, null, 2));
+    
+    const session = await stripe.checkout.sessions.create(sessionConfig);
+
+    console.log('Session created:', session.id);
+    
     return NextResponse.json({ sessionId: session.id });
   } catch (error: any) {
     console.error('Stripe API error:', error);

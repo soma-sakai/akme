@@ -1,16 +1,12 @@
 'use client';
 
-// useEffectは使用していないため削除済み
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { products } from '@/data/products';
-import { getStripe } from '@/lib/stripe';
+import { getStripe, hasStripeConfig } from '@/lib/stripe';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useParams } from 'next/navigation';
-
-// Stripe APIキーが設定されているかチェック
-const hasStripeConfig = !!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
 
 export default function ProductDetail() {
   const params = useParams();
@@ -21,6 +17,13 @@ export default function ProductDetail() {
   const [purchaseType, setPurchaseType] = useState<'one-time' | 'subscription'>('one-time');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [stripeAvailable, setStripeAvailable] = useState(false);
+  
+  // 環境変数チェックをクライアントサイドで行う
+  useEffect(() => {
+    // クライアントサイドでStripe設定が利用可能かチェック
+    setStripeAvailable(!!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
+  }, []);
   
   // 商品情報を取得
   const product = products.find(p => p.id === id);
@@ -57,7 +60,7 @@ export default function ProductDetail() {
     }
     
     // Stripe設定がない場合はエラーメッセージを表示して処理を中断
-    if (!hasStripeConfig) {
+    if (!stripeAvailable) {
       setError('決済システムの設定が完了していません。管理者にお問い合わせください。');
       return;
     }

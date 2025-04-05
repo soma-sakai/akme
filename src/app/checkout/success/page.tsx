@@ -24,6 +24,11 @@ function SuccessContent() {
           // const response = await fetch(`/api/orders/session/${sessionId}`);
           // const data = await response.json();
           
+          // セッションIDをローカルストレージに一時的に保存（ページ再読み込み対策）
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('lastSessionId', sessionId);
+          }
+          
           // デモ用の注文詳細
           setOrderDetails({
             id: sessionId.slice(-6), // セッションIDの最後の6文字を注文番号として使用
@@ -33,6 +38,23 @@ function SuccessContent() {
           
           setLoading(false);
         } else {
+          // ページが再読み込みされた場合、ローカルストレージからセッションIDを取得
+          if (typeof window !== 'undefined') {
+            const lastSessionId = localStorage.getItem('lastSessionId');
+            if (lastSessionId) {
+              console.log('ローカルストレージからセッションIDを復元:', lastSessionId);
+              // デモ用の注文詳細
+              setOrderDetails({
+                id: lastSessionId.slice(-6),
+                date: new Date().toLocaleDateString('ja-JP'),
+                total: '¥2,500',
+                note: '※ページが再読み込みされました。'
+              });
+              setLoading(false);
+              return;
+            }
+          }
+          
           console.warn('セッションIDが見つかりません');
           setError('注文情報が見つかりませんでした。');
           setLoading(false);
@@ -106,6 +128,11 @@ function SuccessContent() {
               {orderDetails.total && (
                 <p className="mt-1 text-sm text-gray-600">
                   合計: {orderDetails.total}
+                </p>
+              )}
+              {orderDetails.note && (
+                <p className="mt-3 text-xs text-gray-500 italic">
+                  {orderDetails.note}
                 </p>
               )}
             </div>
