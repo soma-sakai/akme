@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, Suspense } from 'react';
+import { useState, Suspense, useEffect } from 'react';
 import { useAuthContext } from '@/contexts/AuthContext';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { getSupabaseStatusMessage, isSupabaseAvailable } from '@/lib/supabase';
 
 // SearchParamsを使用するコンポーネント
 function LoginContent() {
@@ -11,14 +12,31 @@ function LoginContent() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [supabaseAvailable, setSupabaseAvailable] = useState(true);
   
   const { signIn } = useAuthContext();
   const searchParams = useSearchParams();
   const registrationSuccess = searchParams.get('registration') === 'success';
   
+  // Supabaseの可用性をチェック
+  useEffect(() => {
+    const available = isSupabaseAvailable();
+    setSupabaseAvailable(available);
+    
+    if (!available) {
+      setError(`認証サービスが利用できません。環境設定を確認してください。詳細: ${getSupabaseStatusMessage()}`);
+    }
+  }, []);
+  
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    
+    if (!supabaseAvailable) {
+      setError('認証サービスが利用できません。ブラウザのコンソールを確認してください。');
+      return;
+    }
+    
     setLoading(true);
     
     try {
@@ -103,9 +121,9 @@ function LoginContent() {
           <div>
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !supabaseAvailable}
               className={`group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${
-                loading ? 'opacity-70 cursor-not-allowed' : ''
+                (loading || !supabaseAvailable) ? 'opacity-70 cursor-not-allowed' : ''
               }`}
             >
               {loading ? 'ログイン中...' : 'ログイン'}

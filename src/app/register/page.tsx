@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuthContext } from '@/contexts/AuthContext';
 import Link from 'next/link';
+import { getSupabaseStatusMessage, isSupabaseAvailable } from '@/lib/supabase';
 
 export default function Register() {
   const [email, setEmail] = useState('');
@@ -13,12 +14,28 @@ export default function Register() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [agreeTerms, setAgreeTerms] = useState(false);
+  const [supabaseAvailable, setSupabaseAvailable] = useState(true);
   
   const { signUp } = useAuthContext();
+  
+  // Supabaseの可用性をチェック
+  useEffect(() => {
+    const available = isSupabaseAvailable();
+    setSupabaseAvailable(available);
+    
+    if (!available) {
+      setError(`認証サービスが利用できません。環境設定を確認してください。詳細: ${getSupabaseStatusMessage()}`);
+    }
+  }, []);
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    
+    if (!supabaseAvailable) {
+      setError('認証サービスが利用できません。ブラウザのコンソールを確認してください。');
+      return;
+    }
     
     if (password !== confirmPassword) {
       setError('パスワードが一致しません。');
@@ -180,9 +197,9 @@ export default function Register() {
           <div>
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !supabaseAvailable}
               className={`group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${
-                loading ? 'opacity-70 cursor-not-allowed' : ''
+                (loading || !supabaseAvailable) ? 'opacity-70 cursor-not-allowed' : ''
               }`}
             >
               {loading ? '登録中...' : '会員登録する'}
