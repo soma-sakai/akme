@@ -4,6 +4,27 @@ import type { Stripe } from 'stripe';
 // APIハンドラー
 export async function POST(req: Request) {
   try {
+    // リファラーとオリジンのチェック
+    const origin = req.headers.get('origin');
+    const referer = req.headers.get('referer');
+    const allowedOrigins = [
+      process.env.NEXT_PUBLIC_SITE_URL,
+      'http://localhost:3000',
+      'https://akamee-thrgdb47e-gradation.vercel.app'
+    ].filter(Boolean) as string[];
+    
+    // リファラーが許可されたオリジンから来ているか確認
+    const isValidOrigin = origin && allowedOrigins.some(allowed => origin.startsWith(allowed));
+    const isValidReferer = referer && allowedOrigins.some(allowed => referer.startsWith(allowed));
+    
+    if (!isValidOrigin && !isValidReferer) {
+      console.warn(`[API] 不正なオリジンからのリクエスト: origin=${origin}, referer=${referer}`);
+      return NextResponse.json(
+        { error: '不正なリクエスト元からのアクセスです' },
+        { status: 403 }
+      );
+    }
+
     // 遅延インポートでStripeモジュールを読み込む (Vercelデプロイでの問題回避策)
     const { default: StripeSDK } = await import('stripe');
     
@@ -34,6 +55,23 @@ export async function POST(req: Request) {
       if (!items || items.length === 0) {
         return NextResponse.json(
           { error: '商品情報が提供されていません' },
+          { status: 400 }
+        );
+      }
+      
+      // 商品データの最低限の検証
+      const hasInvalidItems = items.some((item: any) => {
+        return (
+          typeof item.price !== 'number' || 
+          item.price <= 0 || 
+          typeof item.name !== 'string' || 
+          item.name.trim() === ''
+        );
+      });
+      
+      if (hasInvalidItems) {
+        return NextResponse.json(
+          { error: '無効な商品データが含まれています' },
           { status: 400 }
         );
       }

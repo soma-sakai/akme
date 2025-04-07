@@ -17,6 +17,9 @@ const nextConfig = {
     NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL || '',
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL || '',
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+    // サーバーサイド環境変数（NEXT_PUBLICなしなのでクライアントには公開されない）
+    STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
+    SUPABASE_SERVICE_KEY: process.env.SUPABASE_SERVICE_KEY,
   },
   poweredByHeader: false, // X-Powered-By ヘッダーを無効化
   productionBrowserSourceMaps: false, // 本番環境でのソースマップを無効化
