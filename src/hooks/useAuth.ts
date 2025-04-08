@@ -170,11 +170,14 @@ export const useAuth = () => {
     }
     
     try {
-      // 現在のサイトURLを取得
-      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 
-                      (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
+      // サイトURLを動的に取得（クライアントサイドの場合）
+      const redirectTo = typeof window !== 'undefined' 
+        ? `${window.location.origin}/auth/callback` 
+        : `${process.env.NEXT_PUBLIC_SITE_URL || 'https://akamee-six.vercel.app'}/auth/callback`;
       
-      // メール認証を行うサインアップ
+      console.log('サインアップ時のリダイレクト先:', redirectTo);
+      
+      // メール確認付きのサインアップ
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -183,8 +186,7 @@ export const useAuth = () => {
             name,
             address
           },
-          // メール確認用のリダイレクトURL設定
-          emailRedirectTo: `${siteUrl}/auth/callback`,
+          emailRedirectTo: redirectTo
         }
       });
 

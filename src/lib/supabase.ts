@@ -2,19 +2,24 @@
 // 注：このモックは開発環境でのテスト用です。実際の環境では本物のSupabaseクライアントを使用してください。
 
 import { createClient } from '@supabase/supabase-js';
-import type { AuthFlowType } from '@supabase/supabase-js';
 
 // Supabase設定 - 環境変数から取得
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-// サイトURL - 環境変数から取得（リダイレクトURLに使用）
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 
-               (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
-
 // 開発環境用のフォールバック値
 const devFallbackUrl = 'https://qsobqueatozrxjjgrrfx.supabase.co';
 const devFallbackKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFzb2JxdWVhdG96cnhqamdycmZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDM2ODY1MzEsImV4cCI6MjA1OTI2MjUzMX0.cTdfnqPsD1F-0Aht0uuZlJEA6GPzWf7eyqh3oE5gcVo';
+
+// デプロイ環境に応じたサイトURL
+const getSiteUrl = () => {
+  if (typeof window !== 'undefined') {
+    // クライアントサイドでは現在のオリジンを使用
+    return window.location.origin;
+  }
+  // サーバーサイドでは環境変数を使用
+  return process.env.NEXT_PUBLIC_SITE_URL || 'https://akamee-six.vercel.app';
+};
 
 // 環境チェック
 const isDevelopment = process.env.NODE_ENV === 'development';
@@ -51,8 +56,10 @@ if (isDevelopment) {
   console.log(`環境: ${process.env.NODE_ENV}, クライアント: ${isClient}`);
   console.log(`Supabase URL: ${url ? url.substring(0, 15) + '...' : 'not set'}`);
   console.log(`Supabase Key: ${key ? key.substring(0, 15) + '...' : 'not set'}`);
-  console.log(`サイトURL: ${siteUrl}`);
 }
+
+// サイトURL (メール認証リンク用)
+const siteUrl = getSiteUrl();
 
 // 初期化オプション
 const options = {
@@ -60,11 +67,13 @@ const options = {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
-    flowType: 'pkce' as AuthFlowType,
-    // メール確認リンクのリダイレクトURLを設定（本番URLを使用）
+    // メール認証設定
     redirectTo: `${siteUrl}/auth/callback`,
   }
 };
+
+// ログ出力
+console.log(`Supabase Auth リダイレクト先: ${options.auth.redirectTo}`);
 
 // グローバル変数にSupabase設定を追加（クライアントサイドで使用）
 if (isClient && url && key) {
