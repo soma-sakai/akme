@@ -9,7 +9,7 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   images: {
-    domains: ['images.unsplash.com', 'placehold.jp'],
+    domains: ['images.unsplash.com', 'placehold.jp', 'via.placeholder.com'],
     unoptimized: process.env.NODE_ENV === 'production' // Vercelでの静的エクスポートでの問題対策
   },
   env: {
