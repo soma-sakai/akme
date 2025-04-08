@@ -15,7 +15,18 @@ export default function Header() {
   };
 
   const handleSignOut = async () => {
-    await signOut();
+    try {
+      const result = await signOut();
+      if (!result.success) {
+        console.error('ログアウト失敗:', result.error);
+        // ログアウトに失敗した場合でも、強制的にホームにリダイレクト
+        window.location.href = '/';
+      }
+    } catch (error) {
+      console.error('ログアウト処理エラー:', error);
+      // エラー発生時も強制的にホームにリダイレクト
+      window.location.href = '/';
+    }
   };
 
   return (

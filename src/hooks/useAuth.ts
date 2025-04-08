@@ -211,17 +211,32 @@ export const useAuth = () => {
     }
     
     try {
+      // ログアウト前にユーザー情報をクリアする
+      setUser(null);
+      
+      // Supabaseセッション削除
       const { error } = await supabase.auth.signOut();
       
       if (error) {
         throw error;
       }
       
-      setUser(null);
+      // ローカルストレージのクリーンアップ
+      if (typeof window !== 'undefined') {
+        // ユーザー関連の情報をすべて削除
+        Object.keys(localStorage).forEach(key => {
+          if (key.startsWith('name_') || key.startsWith('address_')) {
+            localStorage.removeItem(key);
+          }
+        });
+      }
+      
+      // 明示的にホームにリダイレクト
       router.push('/');
       
       return { success: true };
     } catch (error) {
+      console.error('ログアウトエラー:', error);
       return { 
         success: false, 
         error: error instanceof Error ? error.message : '不明なエラーが発生しました' 

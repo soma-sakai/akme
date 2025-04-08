@@ -183,8 +183,8 @@ export async function POST(req: Request) {
       payment_method_types: ['card'],
       line_items: lineItems,
       mode: isSubscription ? 'subscription' : 'payment',
-      success_url: `${baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${baseUrl}/checkout/cancel`,
+      success_url: `${process.env.NEXT_PUBLIC_SITE_URL || baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL || baseUrl}/checkout/cancel`,
       billing_address_collection: 'auto',
       shipping_address_collection: {
         allowed_countries: ['JP'],
