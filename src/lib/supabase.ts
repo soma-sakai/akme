@@ -2,10 +2,15 @@
 // 注：このモックは開発環境でのテスト用です。実際の環境では本物のSupabaseクライアントを使用してください。
 
 import { createClient } from '@supabase/supabase-js';
+import type { AuthFlowType } from '@supabase/supabase-js';
 
 // Supabase設定 - 環境変数から取得
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+// サイトURL - 環境変数から取得（リダイレクトURLに使用）
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 
+               (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
 
 // 開発環境用のフォールバック値
 const devFallbackUrl = 'https://qsobqueatozrxjjgrrfx.supabase.co';
@@ -46,6 +51,7 @@ if (isDevelopment) {
   console.log(`環境: ${process.env.NODE_ENV}, クライアント: ${isClient}`);
   console.log(`Supabase URL: ${url ? url.substring(0, 15) + '...' : 'not set'}`);
   console.log(`Supabase Key: ${key ? key.substring(0, 15) + '...' : 'not set'}`);
+  console.log(`サイトURL: ${siteUrl}`);
 }
 
 // 初期化オプション
@@ -54,6 +60,9 @@ const options = {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
+    flowType: 'pkce' as AuthFlowType,
+    // メール確認リンクのリダイレクトURLを設定（本番URLを使用）
+    redirectTo: `${siteUrl}/auth/callback`,
   }
 };
 
