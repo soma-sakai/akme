@@ -10,7 +10,7 @@ const nextConfig = {
   },
   images: {
     domains: ['images.unsplash.com', 'placehold.jp', 'via.placeholder.com'],
-    unoptimized: false // この設定を変更
+    unoptimized: true // 静的エクスポートモードでは画像最適化を無効にする必要がある
   },
   env: {
     NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '',
