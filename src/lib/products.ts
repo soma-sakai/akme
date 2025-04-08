@@ -1,5 +1,5 @@
 import { supabase, isSupabaseAvailable } from '@/lib/supabase';
-import { Product } from '@/types/product';
+import { Product, convertSupabaseProduct } from '@/types/product';
 import { products as localProducts } from '@/data/products';
 
 // Supabaseから商品データを取得する関数
@@ -11,6 +11,7 @@ export async function fetchProductsFromSupabase(): Promise<Product[]> {
   }
 
   try {
+    console.log('Supabaseから商品データを取得中...');
     const { data, error } = await supabase
       .from('products')
       .select('*');
@@ -25,7 +26,9 @@ export async function fetchProductsFromSupabase(): Promise<Product[]> {
       return localProducts;
     }
 
-    return data as Product[];
+    console.log(`Supabaseから${data.length}件の商品データを取得しました`);
+    // スネークケースからキャメルケースに変換
+    return data.map(item => convertSupabaseProduct(item));
   } catch (error) {
     console.error('Supabaseからの商品データ取得中にエラーが発生しました:', error);
     return localProducts;
@@ -42,6 +45,7 @@ export async function fetchProductById(id: string): Promise<Product | null> {
   }
 
   try {
+    console.log(`商品ID ${id} のデータを取得中...`);
     const { data, error } = await supabase
       .from('products')
       .select('*')
@@ -55,7 +59,15 @@ export async function fetchProductById(id: string): Promise<Product | null> {
       return product || null;
     }
 
-    return data as Product;
+    if (!data) {
+      console.warn(`商品ID ${id} が見つかりません。ローカルデータを使用します`);
+      const product = localProducts.find(p => p.id === id);
+      return product || null;
+    }
+
+    console.log(`商品ID ${id} のデータを取得しました:`, data.name);
+    // スネークケースからキャメルケースに変換
+    return convertSupabaseProduct(data);
   } catch (error) {
     console.error('Supabaseからの商品データ取得中にエラーが発生しました:', error);
     // ローカルデータからフォールバック
