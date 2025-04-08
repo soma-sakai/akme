@@ -170,7 +170,11 @@ export const useAuth = () => {
     }
     
     try {
-      // メール確認なしの直接サインアップ
+      // 現在のサイトURLを取得
+      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 
+                      (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
+      
+      // メール認証を行うサインアップ
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -178,7 +182,9 @@ export const useAuth = () => {
           data: {
             name,
             address
-          }
+          },
+          // メール確認用のリダイレクトURL設定
+          emailRedirectTo: `${siteUrl}/auth/callback`,
         }
       });
 

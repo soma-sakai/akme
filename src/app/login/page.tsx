@@ -19,6 +19,26 @@ function LoginContent() {
   const searchParams = useSearchParams();
   const registrationSuccess = searchParams.get('registration') === 'success';
   const returnUrl = searchParams.get('returnUrl') || '/profile';
+  const errorCode = searchParams.get('error');
+  
+  // エラーコードに基づいたメッセージを表示
+  useEffect(() => {
+    if (errorCode) {
+      switch (errorCode) {
+        case 'auth_init_failed':
+          setError('認証サービスの初期化に失敗しました。');
+          break;
+        case 'callback_no_code':
+          setError('認証コードが見つかりませんでした。');
+          break;
+        case 'callback_failed':
+          setError('認証処理中にエラーが発生しました。もう一度お試しください。');
+          break;
+        default:
+          setError(`ログイン処理中にエラーが発生しました (${errorCode})`);
+      }
+    }
+  }, [errorCode]);
   
   // Supabaseの可用性をチェック
   useEffect(() => {
