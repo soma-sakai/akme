@@ -81,7 +81,7 @@ export async function POST(req: Request) {
 
     // リクエストボディの解析
     let body;
-    let productId, productName, productImage, price, isSubscription, userId;
+    let productId, productName, productImage, price, isSubscription, userId, description;
     
     try {
       body = await req.json();
@@ -95,6 +95,7 @@ export async function POST(req: Request) {
         price = body.price;
         isSubscription = body.isSubscription;
         userId = body.userId;
+        description = body.description;
       } 
       // 従来の形式のリクエスト（items配列）
       else if (body.items && Array.isArray(body.items) && body.items.length > 0) {
@@ -105,6 +106,7 @@ export async function POST(req: Request) {
         price = item.price || 0;
         isSubscription = body.purchaseType === 'subscription';
         userId = 'anonymous';
+        description = item.description;
       }
       else {
         return NextResponse.json(
@@ -141,16 +143,27 @@ export async function POST(req: Request) {
       }
     }
 
+    // 商品データオブジェクトの作成（descriptionが空文字列の場合は含めない）
+    const productData: any = {
+      name: productName,
+    };
+    
+    // 説明文が有効な場合のみ追加（空文字列は無効）
+    if (description && typeof description === 'string' && description.trim() !== '') {
+      productData.description = description;
+    }
+    
+    // 画像が存在する場合のみ追加
+    if (imageUrls.length > 0) {
+      productData.images = imageUrls;
+    }
+
     // ラインアイテムの作成
     const lineItems = [
       {
         price_data: {
           currency: 'jpy',
-          product_data: {
-            name: productName,
-            description: body.description || '',
-            images: imageUrls.length > 0 ? imageUrls : [],
-          },
+          product_data: productData,
           unit_amount: price,
           recurring: isSubscription ? {
             interval: 'month',
