@@ -4,73 +4,81 @@ import { products as localProducts } from '@/data/products';
 
 // Supabaseから商品データを取得する関数
 export async function fetchProductsFromSupabase(): Promise<Product[]> {
-  // Supabaseが利用可能かチェック
   if (!isSupabaseAvailable() || !supabase) {
-    console.warn('Supabaseが利用できないため、ローカルデータを使用します');
+    console.warn('Supabase unavailable, falling back to local data');
     return localProducts;
   }
 
   try {
-    console.log('Supabaseから商品データを取得中...');
-    const { data, error } = await supabase
+    console.log('Fetching products from Supabase...');
+    const { data, error, status } = await supabase
       .from('products')
       .select('*');
 
-    if (error) {
-      console.error('商品データの取得に失敗しました:', error.message);
+    if (error && status !== 406) { // 406はRLS関連のエラーの可能性があるため一旦無視
+      console.error('Error fetching products:', error.message, 'Status:', status);
       return localProducts;
     }
 
     if (!data || data.length === 0) {
-      console.warn('商品データが見つかりません。ローカルデータを使用します');
+      console.warn('No products found in Supabase or empty data returned. Falling back to local data.');
       return localProducts;
     }
 
-    console.log(`Supabaseから${data.length}件の商品データを取得しました`);
-    // スネークケースからキャメルケースに変換
-    return data.map(item => convertSupabaseProduct(item));
+    console.log(`Fetched ${data.length} products from Supabase. First item ID: ${data[0]?.id}`);
+    // データ変換とログ出力
+    return data.map(item => {
+      const converted = convertSupabaseProduct(item);
+      // console.log('Converted product:', converted); // 必要に応じて有効化
+      return converted;
+    });
   } catch (error) {
-    console.error('Supabaseからの商品データ取得中にエラーが発生しました:', error);
+    console.error('Error during Supabase product fetch process:', error);
     return localProducts;
   }
 }
 
 // 特定の商品IDに基づいて商品データを取得する関数
 export async function fetchProductById(id: string): Promise<Product | null> {
-  // Supabaseが利用可能かチェック
   if (!isSupabaseAvailable() || !supabase) {
-    console.warn('Supabaseが利用できないため、ローカルデータを使用します');
+    console.warn(`Supabase unavailable when fetching ID ${id}, falling back to local data`);
     const product = localProducts.find(p => p.id === id);
     return product || null;
   }
 
   try {
-    console.log(`商品ID ${id} のデータを取得中...`);
-    const { data, error } = await supabase
+    console.log(`Fetching product with ID: ${id} from Supabase...`);
+    // idがUUID形式であることを確認（形式が違う場合はエラーの可能性がある）
+    if (!/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(id)) {
+      console.warn(`Invalid UUID format for ID: ${id}. Falling back to local data.`);
+      const product = localProducts.find(p => p.id === id);
+      return product || null;
+    }
+
+    const { data, error, status } = await supabase
       .from('products')
       .select('*')
       .eq('id', id)
       .single();
 
-    if (error) {
-      console.error(`商品ID ${id} の取得に失敗しました:`, error.message);
-      // ローカルデータからフォールバック
+    if (error && status !== 406) {
+      console.error(`Error fetching product ID ${id}:`, error.message, 'Status:', status);
       const product = localProducts.find(p => p.id === id);
       return product || null;
     }
 
     if (!data) {
-      console.warn(`商品ID ${id} が見つかりません。ローカルデータを使用します`);
+      console.warn(`Product with ID ${id} not found in Supabase. Falling back to local data.`);
       const product = localProducts.find(p => p.id === id);
       return product || null;
     }
 
-    console.log(`商品ID ${id} のデータを取得しました:`, data.name);
-    // スネークケースからキャメルケースに変換
-    return convertSupabaseProduct(data);
+    console.log(`Fetched product ID ${id}:`, data.name);
+    const converted = convertSupabaseProduct(data);
+    // console.log('Converted single product:', converted); // 必要に応じて有効化
+    return converted;
   } catch (error) {
-    console.error('Supabaseからの商品データ取得中にエラーが発生しました:', error);
-    // ローカルデータからフォールバック
+    console.error(`Error during Supabase fetch process for ID ${id}:`, error);
     const product = localProducts.find(p => p.id === id);
     return product || null;
   }
