@@ -10,7 +10,7 @@ const nextConfig = {
   },
   images: {
     domains: ['images.unsplash.com', 'placehold.jp', 'via.placeholder.com'],
-    unoptimized: true // 静的エクスポートモードでは画像最適化を無効にする必要がある
+    unoptimized: false // サーバーサイドレンダリングでは画像最適化を有効にできる
   },
   env: {
     NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '',
@@ -25,7 +25,7 @@ const nextConfig = {
   productionBrowserSourceMaps: true, // ソースマップを有効化
   
   // output設定を変更
-  output: 'export', // 静的エクスポート
+  output: 'standalone', // サーバーレンダリングモード
   
   // リライト設定を修正
   async rewrites() {
