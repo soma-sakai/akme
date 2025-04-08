@@ -23,17 +23,34 @@ export default function ProductDetail() {
   const [error, setError] = useState('');
   const [stripeAvailable, setStripeAvailable] = useState(false);
   
+  // IDが変更されたときのデバッグログ
+  useEffect(() => {
+    console.log('商品詳細ページ: 製品ID=', id);
+  }, [id]);
+  
   // 商品データを取得
   useEffect(() => {
     const getProduct = async () => {
       try {
         setLoading(true);
+        setError('');
+        
+        console.log(`商品ID:${id}の詳細を取得中...`);
         const fetchedProduct = await fetchProductById(id);
+        
         if (fetchedProduct) {
+          console.log('商品詳細を取得しました:', fetchedProduct);
           setProduct(fetchedProduct);
         } else {
-          // 商品が見つからない場合は404ページへ
-          router.push('/not-found');
+          console.error('商品が見つかりません。404ページに遷移します');
+          // 商品が見つからなかった場合、ローカルデータからフォールバックを試みる
+          const fallback = localProducts.find(p => p.id === id);
+          if (fallback) {
+            console.log('ローカルデータから商品を見つけました:', fallback);
+            setProduct(fallback);
+          } else {
+            router.push('/not-found');
+          }
         }
       } catch (error) {
         console.error('商品データの取得に失敗しました:', error);
@@ -41,6 +58,7 @@ export default function ProductDetail() {
         // ローカルデータをフォールバックとして使用
         const fallbackProduct = localProducts.find(p => p.id === id);
         if (fallbackProduct) {
+          console.log('エラー発生時のフォールバック: ローカルデータから商品を使用します');
           setProduct(fallbackProduct);
         } else {
           router.push('/not-found');
@@ -50,7 +68,12 @@ export default function ProductDetail() {
       }
     };
     
-    getProduct();
+    if (id) {
+      getProduct();
+    } else {
+      console.error('商品IDが指定されていません');
+      router.push('/products');
+    }
   }, [id, router]);
 
   // 環境変数チェックをクライアントサイドで行う
@@ -178,7 +201,7 @@ export default function ProductDetail() {
             <div className="md:w-1/2">
               <div className="relative h-96 w-full">
                 <Image
-                  src={product.images[activeImageIndex]}
+                  src={product.images[0] || 'https://via.placeholder.com/400x400?text=No+Image'}
                   alt={product.name}
                   fill
                   className="object-contain"
@@ -186,7 +209,7 @@ export default function ProductDetail() {
               </div>
               
               {/* サムネイル画像選択 */}
-              {product.images.length > 1 && (
+              {product.images && product.images.length > 1 && (
                 <div className="flex justify-center mt-4 space-x-4 px-4">
                   {product.images.map((image, index) => (
                     <div

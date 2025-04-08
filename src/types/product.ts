@@ -2,7 +2,6 @@ export type Product = {
   id: string;
   name: string;
   description: string;
-  longDescription?: string;
   price: number;
   images: string[];
   features?: string[];
@@ -20,7 +19,6 @@ export function convertSupabaseProduct(data: any): Product {
     id: data.id,
     name: data.name,
     description: data.description,
-    longDescription: data.long_description,
     price: data.price,
     images: data.images,
     features: data.features,

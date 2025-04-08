@@ -4,81 +4,102 @@ import { products as localProducts } from '@/data/products';
 
 // Supabaseから商品データを取得する関数
 export async function fetchProductsFromSupabase(): Promise<Product[]> {
+  // Supabaseが利用可能かチェック
   if (!isSupabaseAvailable() || !supabase) {
-    console.warn('Supabase unavailable, falling back to local data');
+    console.warn('Supabaseが利用できないため、ローカルデータを使用します');
     return localProducts;
   }
 
   try {
-    console.log('Fetching products from Supabase...');
-    const { data, error, status } = await supabase
-      .from('products')
+    console.log('Supabaseから商品データを取得中...');
+    const { data, error } = await supabase
+      .from('product')
       .select('*');
 
-    if (error && status !== 406) { // 406はRLS関連のエラーの可能性があるため一旦無視
-      console.error('Error fetching products:', error.message, 'Status:', status);
+    console.log('Supabaseレスポンス:', { data, error });
+
+    if (error) {
+      console.error('商品データの取得に失敗しました:', error.message);
       return localProducts;
     }
 
     if (!data || data.length === 0) {
-      console.warn('No products found in Supabase or empty data returned. Falling back to local data.');
+      console.warn('商品データが見つかりません。ローカルデータを使用します');
       return localProducts;
     }
 
-    console.log(`Fetched ${data.length} products from Supabase. First item ID: ${data[0]?.id}`);
-    // データ変換とログ出力
-    return data.map(item => {
+    console.log(`Supabaseから${data.length}件の商品データを取得しました:`, data);
+    // スネークケースからキャメルケースに変換
+    const convertedProducts = data.map(item => {
+      console.log('変換前のデータ:', item);
       const converted = convertSupabaseProduct(item);
-      // console.log('Converted product:', converted); // 必要に応じて有効化
+      console.log('変換後のデータ:', converted);
       return converted;
     });
+    
+    return convertedProducts;
   } catch (error) {
-    console.error('Error during Supabase product fetch process:', error);
+    console.error('Supabaseからの商品データ取得中にエラーが発生しました:', error);
     return localProducts;
   }
 }
 
 // 特定の商品IDに基づいて商品データを取得する関数
 export async function fetchProductById(id: string): Promise<Product | null> {
+  console.log(`商品ID ${id} の取得を試みます`);
+  
+  // Supabaseが利用可能かチェック
   if (!isSupabaseAvailable() || !supabase) {
-    console.warn(`Supabase unavailable when fetching ID ${id}, falling back to local data`);
+    console.warn('Supabaseが利用できないため、ローカルデータを使用します');
     const product = localProducts.find(p => p.id === id);
     return product || null;
   }
 
   try {
-    console.log(`Fetching product with ID: ${id} from Supabase...`);
-    // idがUUID形式であることを確認（形式が違う場合はエラーの可能性がある）
-    if (!/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(id)) {
-      console.warn(`Invalid UUID format for ID: ${id}. Falling back to local data.`);
-      const product = localProducts.find(p => p.id === id);
-      return product || null;
-    }
-
-    const { data, error, status } = await supabase
-      .from('products')
+    console.log(`商品ID ${id} のデータを取得中...`);
+    const { data, error } = await supabase
+      .from('product')
       .select('*')
       .eq('id', id)
       .single();
 
-    if (error && status !== 406) {
-      console.error(`Error fetching product ID ${id}:`, error.message, 'Status:', status);
+    console.log('Supabaseレスポンス:', { data, error });
+
+    if (error) {
+      console.error(`商品ID ${id} の取得に失敗しました:`, error.message);
+      // IDがUUIDかテストしてみる
+      if (id.length < 36) {
+        console.log('ローカルデータからの検索を試みます');
+        const product = localProducts.find(p => p.id === id);
+        return product || null;
+      }
+      
+      // ローカルデータから合致するものを探してみる
+      console.log('すべてのデータを取得して一致するものを探します');
+      const { data: allData } = await supabase.from('product').select('*');
+      if (allData && allData.length > 0) {
+        console.log('利用可能なすべての商品:', allData);
+      }
+      
+      // フォールバック
       const product = localProducts.find(p => p.id === id);
       return product || null;
     }
 
     if (!data) {
-      console.warn(`Product with ID ${id} not found in Supabase. Falling back to local data.`);
+      console.warn(`商品ID ${id} が見つかりません。ローカルデータを使用します`);
       const product = localProducts.find(p => p.id === id);
       return product || null;
     }
 
-    console.log(`Fetched product ID ${id}:`, data.name);
-    const converted = convertSupabaseProduct(data);
-    // console.log('Converted single product:', converted); // 必要に応じて有効化
-    return converted;
+    console.log(`商品ID ${id} のデータを取得しました:`, data);
+    // スネークケースからキャメルケースに変換
+    const convertedProduct = convertSupabaseProduct(data);
+    console.log('変換後の商品データ:', convertedProduct);
+    return convertedProduct;
   } catch (error) {
-    console.error(`Error during Supabase fetch process for ID ${id}:`, error);
+    console.error('Supabaseからの商品データ取得中にエラーが発生しました:', error);
+    // ローカルデータからフォールバック
     const product = localProducts.find(p => p.id === id);
     return product || null;
   }

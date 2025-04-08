@@ -13,32 +13,41 @@ export default function ProductCard({ product }: ProductCardProps) {
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('ja-JP', {
       style: 'currency',
-      currency: 'JPY'
+      currency: 'JPY',
+      minimumFractionDigits: 0
     }).format(price);
   };
 
+  // プロダクトIDを安全に処理
+  const safeId = id || 'unknown';
+  
+  // 画像URLの安全な取得
+  const imageUrl = images && images.length > 0 
+    ? images[0] 
+    : 'https://via.placeholder.com/400x400?text=No+Image';
+
   return (
     <div className="bg-white rounded-lg shadow-md overflow-hidden transition-transform hover:scale-105">
-      <Link href={`/products/${id}`}>
+      <Link href={`/products/${safeId}`}>
         <div className="relative h-64 w-full">
           <Image
-            src={images[0]}
-            alt={name}
+            src={imageUrl}
+            alt={name || '商品'}
             fill
-            style={{ objectFit: 'cover' }}
+            className="object-cover"
           />
         </div>
       </Link>
       <div className="p-6">
-        <Link href={`/products/${id}`}>
-          <h3 className="text-xl font-bold mb-2 hover:text-primary transition">{name}</h3>
+        <Link href={`/products/${safeId}`}>
+          <h3 className="text-xl font-bold mb-2 hover:text-primary transition">{name || '商品名なし'}</h3>
         </Link>
         <p className="text-gray-600 mb-4 line-clamp-2">
-          {description}
+          {description || '説明なし'}
         </p>
         <div className="flex justify-between items-center">
           <div>
-            <span className="text-xl font-bold text-primary">{formatPrice(price)}</span>
+            <span className="text-xl font-bold text-primary">{formatPrice(price || 0)}</span>
             {isSubscription && (
               <div className="text-sm text-gray-600">
                 サブスク: {formatPrice(subscriptionPrice || 0)}/月
@@ -46,7 +55,7 @@ export default function ProductCard({ product }: ProductCardProps) {
             )}
           </div>
           <Link 
-            href={`/products/${id}`} 
+            href={`/products/${safeId}`} 
             className="bg-primary text-white py-2 px-4 rounded hover:bg-opacity-90 transition"
           >
             詳細を見る
