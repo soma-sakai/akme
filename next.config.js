@@ -10,7 +10,7 @@ const nextConfig = {
   },
   images: {
     domains: ['images.unsplash.com', 'placehold.jp', 'via.placeholder.com'],
-    unoptimized: process.env.NODE_ENV === 'production' // Vercelでの静的エクスポートでの問題対策
+    unoptimized: false // この設定を変更
   },
   env: {
     NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '',
@@ -22,26 +22,26 @@ const nextConfig = {
     SUPABASE_SERVICE_KEY: process.env.SUPABASE_SERVICE_KEY,
   },
   poweredByHeader: false, // X-Powered-By ヘッダーを無効化
-  productionBrowserSourceMaps: false, // 本番環境でのソースマップを無効化
+  productionBrowserSourceMaps: true, // ソースマップを有効化
   
-  // Vercelデプロイ向け設定
-  output: 'standalone', // サーバーレス関数の最適化
+  // output設定を変更
+  output: 'export', // 静的エクスポート
   
-  // 404エラー対策
+  // リライト設定を修正
   async rewrites() {
     return [
       {
-        source: '/:path*',
-        destination: '/:path*',
+        source: '/api/:path*',
+        destination: '/api/:path*',
       },
       {
-        source: '/',
-        destination: '/',
-      },
+        source: '/:path*',
+        destination: '/:path*',
+      }
     ];
   },
   
-  // フォールバックページを設定
+  // フォールバックページ設定を変更
   async redirects() {
     return [];
   }
