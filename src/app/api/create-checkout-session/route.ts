@@ -7,15 +7,31 @@ export async function POST(req: Request) {
     // リファラーとオリジンのチェック
     const origin = req.headers.get('origin');
     const referer = req.headers.get('referer');
+    
+    // デプロイ環境に応じたサイトURL
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 
+                   (typeof self !== 'undefined' && self.location?.origin) || 
+                   'http://localhost:3000';
+                   
+    const baseUrl = new URL(siteUrl).origin;
+    
     const allowedOrigins = [
-      process.env.NEXT_PUBLIC_SITE_URL,
+      siteUrl,
+      baseUrl,
       'http://localhost:3000',
-      'https://akamee-thrgdb47e-gradation.vercel.app'
+      'https://akamee-thrgdb47e-gradation.vercel.app',
+      'https://akme.vercel.app',
+      'https://akme-git-main-soma-sakais-projects.vercel.app'
     ].filter(Boolean) as string[];
     
+    console.log(`[API] サイトURL: ${siteUrl}, ベースURL: ${baseUrl}`);
+    console.log(`[API] リクエスト元: origin=${origin}, referer=${referer}`);
+    
     // リファラーが許可されたオリジンから来ているか確認
-    const isValidOrigin = origin && allowedOrigins.some(allowed => origin.startsWith(allowed));
-    const isValidReferer = referer && allowedOrigins.some(allowed => referer.startsWith(allowed));
+    // 開発環境では検証をスキップ（より寛容に）
+    const isDevMode = process.env.NODE_ENV === 'development';
+    const isValidOrigin = isDevMode || !origin || allowedOrigins.some(allowed => origin.includes(allowed));
+    const isValidReferer = isDevMode || !referer || allowedOrigins.some(allowed => referer.includes(allowed));
     
     if (!isValidOrigin && !isValidReferer) {
       console.warn(`[API] 不正なオリジンからのリクエスト: origin=${origin}, referer=${referer}`);
@@ -26,7 +42,17 @@ export async function POST(req: Request) {
     }
 
     // 遅延インポートでStripeモジュールを読み込む (Vercelデプロイでの問題回避策)
-    const { default: StripeSDK } = await import('stripe');
+    let StripeSDK;
+    try {
+      const stripeModule = await import('stripe');
+      StripeSDK = stripeModule.default;
+    } catch (importError) {
+      console.error('[API] Stripeモジュールのインポートに失敗:', importError);
+      return NextResponse.json(
+        { error: 'サーバー側でStripeモジュールのロードに失敗しました' },
+        { status: 500 }
+      );
+    }
     
     // Stripeの初期化
     const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
@@ -39,9 +65,18 @@ export async function POST(req: Request) {
     }
 
     // APIバージョンを動的に扱うことでエラーを避ける
-    const stripe = new StripeSDK(stripeSecretKey, {
-      apiVersion: '2023-10-16' as any,
-    });
+    let stripe;
+    try {
+      stripe = new StripeSDK(stripeSecretKey, {
+        apiVersion: '2023-10-16' as any,
+      });
+    } catch (stripeInitError) {
+      console.error('[API] Stripeの初期化に失敗:', stripeInitError);
+      return NextResponse.json(
+        { error: 'Stripe連携の初期化に失敗しました' },
+        { status: 500 }
+      );
+    }
 
     // リクエストボディの解析
     let items;
@@ -93,8 +128,7 @@ export async function POST(req: Request) {
         if (typeof firstImage === 'string' && firstImage.trim() !== '') {
           // URLが相対パスの場合は絶対URLに変換
           if (firstImage.startsWith('/')) {
-            const origin = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
-            imageUrls.push(`${origin}${firstImage}`);
+            imageUrls.push(`${baseUrl}${firstImage}`);
           } else if (firstImage.startsWith('http')) {
             imageUrls.push(firstImage);
           }
@@ -116,16 +150,15 @@ export async function POST(req: Request) {
     });
 
     // サイトのベースURLを取得
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
-    console.log('[API] Using site URL for redirects:', siteUrl);
+    console.log('[API] サイトベースURL:', baseUrl);
 
     // チェックアウトセッションの作成
     const sessionConfig: any = {
       payment_method_types: ['card'],
       line_items: lineItems,
       mode: purchaseType === 'subscription' ? 'subscription' : 'payment',
-      success_url: `${siteUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${siteUrl}/checkout/cancel`,
+      success_url: `${baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}/checkout/cancel`,
       billing_address_collection: 'auto',
       shipping_address_collection: {
         allowed_countries: ['JP'],

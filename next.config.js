@@ -24,16 +24,27 @@ const nextConfig = {
   poweredByHeader: false, // X-Powered-By ヘッダーを無効化
   productionBrowserSourceMaps: false, // 本番環境でのソースマップを無効化
   
-  // 出力ディレクトリを明示的に設定
-  distDir: '.next',
+  // Vercelデプロイ向け設定
+  output: 'standalone', // サーバーレス関数の最適化
   
-  // エラー処理の設定
-  onDemandEntries: {
-    // サーバーサイドのページがメモリに保持される時間（ミリ秒）
-    maxInactiveAge: 60 * 1000,
-    // メモリに同時に保持されるページ数
-    pagesBufferLength: 5,
+  // 404エラー対策
+  async rewrites() {
+    return [
+      {
+        source: '/:path*',
+        destination: '/:path*',
+      },
+      {
+        source: '/',
+        destination: '/',
+      },
+    ];
   },
+  
+  // フォールバックページを設定
+  async redirects() {
+    return [];
+  }
 };
 
 module.exports = nextConfig; 

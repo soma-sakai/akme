@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "build:skip-checks": "next build"
+    "vercel-build": "next build",
+    "build:skip-checks": "cross-env SKIP_ESLINT=true SKIP_TYPE_CHECK=true next build"
   },
   "dependencies": {
     "@stripe/react-stripe-js": "^3.6.0",
@@ -25,10 +26,14 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "autoprefixer": "^10.4.19",
+    "cross-env": "^7.0.3",
     "eslint": "^9",
     "eslint-config-next": "15.2.4",
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.1",
     "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=16.0.0"
   }
 }
