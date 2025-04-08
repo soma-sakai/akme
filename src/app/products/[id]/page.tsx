@@ -113,12 +113,14 @@ export default function ProductDetail() {
     
     try {
       setIsLoading(true);
+      setError('');
       
       if (!stripeAvailable) {
         setError('決済システムが利用できません。管理者にお問い合わせください。');
         return;
       }
       
+      console.log('Stripe初期化中...');
       const stripe = await getStripe();
       
       if (!stripe) {
@@ -126,37 +128,68 @@ export default function ProductDetail() {
         return;
       }
       
+      console.log('Stripe初期化完了。チェックアウトセッション作成を開始します...');
+      
+      // 選択された価格を決定
+      const selectedPrice = purchaseType === 'subscription' && product.isSubscription 
+        ? product.subscriptionPrice || product.price
+        : product.price;
+      
+      console.log('選択された価格:', selectedPrice);
+      console.log('購入タイプ:', purchaseType);
+      
+      // 商品画像URLを取得
+      const imageUrl = product.images && product.images.length > 0 
+        ? product.images[0] 
+        : undefined;
+      
+      // リクエストデータを準備
+      const requestData = {
+        productId: product.id,
+        productName: product.name,
+        productImage: imageUrl,
+        price: selectedPrice,
+        isSubscription: purchaseType === 'subscription' && product.isSubscription,
+        userId: user?.id || 'anonymous',
+      };
+      
+      console.log('APIリクエストデータ:', requestData);
+      
       // サーバーサイドのAPIを呼び出してCheckoutセッションを作成
       const response = await fetch('/api/create-checkout-session', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          productId: product.id,
-          productName: product.name,
-          productImage: product.images[0],
-          price: purchaseType === 'subscription' && product.isSubscription 
-            ? product.subscriptionPrice 
-            : product.price,
-          isSubscription: purchaseType === 'subscription' && product.isSubscription,
-          userId: user?.id || 'anonymous',
-        }),
+        body: JSON.stringify(requestData),
       });
+      
+      console.log('APIレスポンスステータス:', response.status);
       
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || '決済セッションの作成に失敗しました');
+        console.error('APIエラーレスポンス:', errorData);
+        throw new Error(errorData.error || '決済セッションの作成に失敗しました');
       }
       
       const session = await response.json();
+      console.log('セッション作成成功:', session);
+      
+      if (!session || (!session.id && !session.sessionId)) {
+        throw new Error('有効なセッションIDが返されませんでした');
+      }
+      
+      // セッションIDを取得（APIレスポンスの互換性を考慮）
+      const sessionId = session.id || session.sessionId;
+      console.log('チェックアウトにリダイレクト: セッションID =', sessionId);
       
       // Stripeにリダイレクト
       const result = await stripe.redirectToCheckout({
-        sessionId: session.id,
+        sessionId: sessionId,
       });
       
       if (result.error) {
+        console.error('StripeリダイレクトエラーError:', result.error);
         setError(result.error.message || '決済処理中にエラーが発生しました');
       }
     } catch (error) {

@@ -21,7 +21,8 @@ export async function POST(req: Request) {
       'http://localhost:3000',
       'https://akamee-thrgdb47e-gradation.vercel.app',
       'https://akme.vercel.app',
-      'https://akme-git-main-soma-sakais-projects.vercel.app'
+      'https://akme-git-main-soma-sakais-projects.vercel.app',
+      'https://akamee-six.vercel.app'
     ].filter(Boolean) as string[];
     
     console.log(`[API] サイトURL: ${siteUrl}, ベースURL: ${baseUrl}`);
@@ -79,34 +80,43 @@ export async function POST(req: Request) {
     }
 
     // リクエストボディの解析
-    let items;
-    let purchaseType;
+    let body;
+    let productId, productName, productImage, price, isSubscription, userId;
     
     try {
-      const body = await req.json();
-      items = body.items;
-      purchaseType = body.purchaseType;
+      body = await req.json();
+      console.log('[API] リクエストボディ:', body);
       
-      if (!items || items.length === 0) {
+      // 新しい形式のリクエスト（単一商品）
+      if (body.productId && body.productName && typeof body.price === 'number') {
+        productId = body.productId;
+        productName = body.productName;
+        productImage = body.productImage;
+        price = body.price;
+        isSubscription = body.isSubscription;
+        userId = body.userId;
+      } 
+      // 従来の形式のリクエスト（items配列）
+      else if (body.items && Array.isArray(body.items) && body.items.length > 0) {
+        const item = body.items[0];
+        productId = item.id || 'unknown';
+        productName = item.name || '商品';
+        productImage = item.images && item.images.length > 0 ? item.images[0] : null;
+        price = item.price || 0;
+        isSubscription = body.purchaseType === 'subscription';
+        userId = 'anonymous';
+      }
+      else {
         return NextResponse.json(
-          { error: '商品情報が提供されていません' },
+          { error: '商品情報が提供されていないか、無効なフォーマットです' },
           { status: 400 }
         );
       }
       
-      // 商品データの最低限の検証
-      const hasInvalidItems = items.some((item: any) => {
-        return (
-          typeof item.price !== 'number' || 
-          item.price <= 0 || 
-          typeof item.name !== 'string' || 
-          item.name.trim() === ''
-        );
-      });
-      
-      if (hasInvalidItems) {
+      // 必須項目の検証
+      if (!productName || typeof price !== 'number' || price <= 0) {
         return NextResponse.json(
-          { error: '無効な商品データが含まれています' },
+          { error: '無効な商品データです。商品名と価格は必須です。' },
           { status: 400 }
         );
       }
@@ -118,45 +128,48 @@ export async function POST(req: Request) {
       );
     }
 
-    // 商品情報からStripeのline_itemsを作成
-    const lineItems = items.map((item: any) => {
-      // 画像URLが絶対URLであることを確認
-      const imageUrls: string[] = [];
-      if (item.images && Array.isArray(item.images) && item.images.length > 0) {
-        // 画像URLが有効かチェック
-        const firstImage = item.images[0];
-        if (typeof firstImage === 'string' && firstImage.trim() !== '') {
-          // URLが相対パスの場合は絶対URLに変換
-          if (firstImage.startsWith('/')) {
-            imageUrls.push(`${baseUrl}${firstImage}`);
-          } else if (firstImage.startsWith('http')) {
-            imageUrls.push(firstImage);
-          }
+    // 画像URLの処理
+    const imageUrls: string[] = [];
+    if (productImage) {
+      // URLが相対パスの場合は絶対URLに変換
+      if (typeof productImage === 'string' && productImage.trim() !== '') {
+        if (productImage.startsWith('/')) {
+          imageUrls.push(`${baseUrl}${productImage}`);
+        } else if (productImage.startsWith('http')) {
+          imageUrls.push(productImage);
         }
       }
+    }
 
-      return {
+    // ラインアイテムの作成
+    const lineItems = [
+      {
         price_data: {
           currency: 'jpy',
           product_data: {
-            name: item.name || '商品',
-            description: item.description || '',
+            name: productName,
+            description: body.description || '',
             images: imageUrls.length > 0 ? imageUrls : [],
           },
-          unit_amount: item.price || 0,
+          unit_amount: price,
+          recurring: isSubscription ? {
+            interval: 'month',
+            interval_count: 1
+          } : undefined,
         },
-        quantity: item.quantity || 1,
-      };
-    });
+        quantity: 1,
+      },
+    ];
 
     // サイトのベースURLを取得
     console.log('[API] サイトベースURL:', baseUrl);
+    console.log('[API] ライン項目:', lineItems);
 
     // チェックアウトセッションの作成
     const sessionConfig: any = {
       payment_method_types: ['card'],
       line_items: lineItems,
-      mode: purchaseType === 'subscription' ? 'subscription' : 'payment',
+      mode: isSubscription ? 'subscription' : 'payment',
       success_url: `${baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${baseUrl}/checkout/cancel`,
       billing_address_collection: 'auto',
@@ -164,13 +177,18 @@ export async function POST(req: Request) {
         allowed_countries: ['JP'],
       },
       locale: 'ja',
+      metadata: {
+        productId: productId,
+        userId: userId
+      }
     };
 
     try {
+      console.log('[API] セッション作成設定:', sessionConfig);
       const session = await stripe.checkout.sessions.create(sessionConfig);
       console.log('[API] Session created:', session.id);
       
-      return NextResponse.json({ sessionId: session.id });
+      return NextResponse.json({ id: session.id, sessionId: session.id }); // 互換性のために両方のプロパティを返す
     } catch (stripeError: any) {
       console.error('[API] Stripe session creation error:', stripeError);
       return NextResponse.json(
