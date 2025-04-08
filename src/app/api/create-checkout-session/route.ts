@@ -10,8 +10,7 @@ export async function POST(req: Request) {
     
     // デプロイ環境に応じたサイトURL
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 
-                   (typeof self !== 'undefined' && self.location?.origin) || 
-                   'http://localhost:3000';
+                   (origin || referer || 'http://localhost:3000');
                    
     const baseUrl = new URL(siteUrl).origin;
     
@@ -178,13 +177,20 @@ export async function POST(req: Request) {
     console.log('[API] サイトベースURL:', baseUrl);
     console.log('[API] ライン項目:', lineItems);
 
+    // 成功時と失敗時のリダイレクトURL
+    const successUrl = `${baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = `${baseUrl}/checkout/cancel`;
+    
+    console.log('[API] 成功時リダイレクト先:', successUrl);
+    console.log('[API] キャンセル時リダイレクト先:', cancelUrl);
+
     // チェックアウトセッションの作成
     const sessionConfig: any = {
       payment_method_types: ['card'],
       line_items: lineItems,
       mode: isSubscription ? 'subscription' : 'payment',
-      success_url: `${process.env.NEXT_PUBLIC_SITE_URL || baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL || baseUrl}/checkout/cancel`,
+      success_url: successUrl,
+      cancel_url: cancelUrl,
       billing_address_collection: 'auto',
       shipping_address_collection: {
         allowed_countries: ['JP'],
@@ -192,7 +198,8 @@ export async function POST(req: Request) {
       locale: 'ja',
       metadata: {
         productId: productId,
-        userId: userId
+        userId: userId,
+        origin: origin || 'unknown'
       }
     };
 

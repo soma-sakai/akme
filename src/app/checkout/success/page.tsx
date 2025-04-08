@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { useAuthContext } from '@/contexts/AuthContext';
 
 // SearchParamsを使用するコンポーネントを分離
 function SuccessContent() {
@@ -11,22 +12,24 @@ function SuccessContent() {
   const [error, setError] = useState<string | null>(null);
   const searchParams = useSearchParams();
   const sessionId = searchParams ? searchParams.get('session_id') : null;
+  const { user, getOrderHistory } = useAuthContext();
 
   useEffect(() => {
     const getOrderDetails = async () => {
       try {
+        // ログインしているユーザーなら注文履歴を更新
+        if (user) {
+          await getOrderHistory();
+        }
+        
         // セッションIDが存在する場合は注文詳細を取得
         if (sessionId) {
           console.log('セッションID:', sessionId);
           
-          // 実際のプロジェクトでは、ここでAPIを呼び出して注文詳細を取得することもできます
-          // 例: APIエンドポイントから注文詳細を取得
-          // const response = await fetch(`/api/orders/session/${sessionId}`);
-          // const data = await response.json();
-          
           // セッションIDをローカルストレージに一時的に保存（ページ再読み込み対策）
           if (typeof window !== 'undefined') {
             localStorage.setItem('lastSessionId', sessionId);
+            localStorage.setItem('lastOrderDate', new Date().toISOString());
           }
           
           // デモ用の注文詳細
@@ -41,14 +44,35 @@ function SuccessContent() {
           // ページが再読み込みされた場合、ローカルストレージからセッションIDを取得
           if (typeof window !== 'undefined') {
             const lastSessionId = localStorage.getItem('lastSessionId');
+            const lastOrderDate = localStorage.getItem('lastOrderDate');
+            
             if (lastSessionId) {
               console.log('ローカルストレージからセッションIDを復元:', lastSessionId);
+              
+              // 最後の注文日時を取得（存在すれば）
+              let orderDate = new Date().toLocaleDateString('ja-JP');
+              if (lastOrderDate) {
+                try {
+                  orderDate = new Date(lastOrderDate).toLocaleDateString('ja-JP');
+                } catch (e) {
+                  console.error('日付の変換に失敗:', e);
+                }
+              }
+              
               // デモ用の注文詳細
               setOrderDetails({
                 id: lastSessionId.slice(-6),
-                date: new Date().toLocaleDateString('ja-JP'),
+                date: orderDate,
                 total: '¥2,500',
                 note: '※ページが再読み込みされました。'
+              });
+              setLoading(false);
+              return;
+            } else {
+              // セッションIDもローカルストレージも存在しない場合は、一般的な成功メッセージを表示
+              setOrderDetails({
+                date: new Date().toLocaleDateString('ja-JP'),
+                note: '購入が完了しました。'
               });
               setLoading(false);
               return;
@@ -56,7 +80,11 @@ function SuccessContent() {
           }
           
           console.warn('セッションIDが見つかりません');
-          setError('注文情報が見つかりませんでした。');
+          // エラーではなく一般的な成功メッセージを表示
+          setOrderDetails({
+            date: new Date().toLocaleDateString('ja-JP'),
+            note: '購入が完了しました。'
+          });
           setLoading(false);
         }
       } catch (err) {
@@ -67,7 +95,7 @@ function SuccessContent() {
     };
 
     getOrderDetails();
-  }, [sessionId]);
+  }, [sessionId, user, getOrderHistory]);
 
   if (error) {
     return (
@@ -119,9 +147,11 @@ function SuccessContent() {
           ) : orderDetails ? (
             <div className="mt-6 border-t border-gray-200 pt-6">
               <h3 className="text-lg font-medium text-gray-900">注文情報</h3>
-              <p className="mt-2 text-sm text-gray-600">
-                注文番号: {orderDetails.id}
-              </p>
+              {orderDetails.id && (
+                <p className="mt-2 text-sm text-gray-600">
+                  注文番号: {orderDetails.id}
+                </p>
+              )}
               <p className="mt-1 text-sm text-gray-600">
                 日付: {orderDetails.date}
               </p>
@@ -133,6 +163,11 @@ function SuccessContent() {
               {orderDetails.note && (
                 <p className="mt-3 text-xs text-gray-500 italic">
                   {orderDetails.note}
+                </p>
+              )}
+              {user && (
+                <p className="mt-3 text-sm text-gray-600">
+                  注文詳細はマイページの<Link href="/profile" className="text-primary hover:underline">注文履歴</Link>でも確認できます。
                 </p>
               )}
             </div>
