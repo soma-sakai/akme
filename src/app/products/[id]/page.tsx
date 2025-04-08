@@ -3,22 +3,56 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { products } from '@/data/products';
+import { products as localProducts } from '@/data/products';
+import { fetchProductById } from '@/lib/products';
 import { getStripe, checkStripeConfig } from '@/lib/stripe';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useParams } from 'next/navigation';
+import { Product } from '@/types/product';
 
 export default function ProductDetail() {
   const params = useParams();
   const id = params.id as string;
   const router = useRouter();
   const { user } = useAuthContext();
+  const [product, setProduct] = useState<Product | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [purchaseType, setPurchaseType] = useState<'one-time' | 'subscription'>('one-time');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [stripeAvailable, setStripeAvailable] = useState(false);
   
+  // 商品データを取得
+  useEffect(() => {
+    const getProduct = async () => {
+      try {
+        setLoading(true);
+        const fetchedProduct = await fetchProductById(id);
+        if (fetchedProduct) {
+          setProduct(fetchedProduct);
+        } else {
+          // 商品が見つからない場合は404ページへ
+          router.push('/not-found');
+        }
+      } catch (error) {
+        console.error('商品データの取得に失敗しました:', error);
+        setError('商品データの取得に失敗しました。再度お試しください。');
+        // ローカルデータをフォールバックとして使用
+        const fallbackProduct = localProducts.find(p => p.id === id);
+        if (fallbackProduct) {
+          setProduct(fallbackProduct);
+        } else {
+          router.push('/not-found');
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    getProduct();
+  }, [id, router]);
+
   // 環境変数チェックをクライアントサイドで行う
   useEffect(() => {
     // Stripe設定が利用可能かチェック
@@ -41,163 +75,136 @@ export default function ProductDetail() {
     checkStripe();
   }, []);
   
-  // 商品情報を取得
-  const product = products.find(p => p.id === id);
-  
-  if (!product) {
-    return (
-      <div className="min-h-[500px] flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">商品が見つかりませんでした</h1>
-          <button 
-            onClick={() => router.back()}
-            className="bg-primary text-white px-4 py-2 rounded hover:bg-opacity-90 transition"
-          >
-            前のページに戻る
-          </button>
-        </div>
-      </div>
-    );
-  }
-  
-  // 価格をフォーマットする関数
+  // 価格を日本円表示にフォーマット
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('ja-JP', {
       style: 'currency',
-      currency: 'JPY'
+      currency: 'JPY',
+      minimumFractionDigits: 0
     }).format(price);
   };
   
-  // Stripeチェックアウト処理
+  // Stripeの決済セッションを作成
   const handleCheckout = async () => {
-    if (!user) {
-      router.push('/login?redirect=' + encodeURIComponent(`/products/${id}`));
-      return;
-    }
-    
-    // Stripe設定がない場合はエラーメッセージを表示して処理を中断
-    if (!stripeAvailable) {
-      setError('決済システムの設定が完了していません。管理者にお問い合わせください。');
-      return;
-    }
-    
-    setIsLoading(true);
-    setError('');
+    if (!product) return;
     
     try {
-      // 商品画像のパスを絶対URLに変換
-      const productImages = product.images.map(img => {
-        if (img.startsWith('/')) {
-          // 環境変数からサイトURLを取得、なければwindow.locationを使用
-          const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 
-                        (typeof window !== 'undefined' ? window.location.origin : '');
-          return `${baseUrl}${img}`;
-        }
-        return img;
-      });
+      setIsLoading(true);
       
-      console.log('決済処理を開始します...');
+      if (!stripeAvailable) {
+        setError('決済システムが利用できません。管理者にお問い合わせください。');
+        return;
+      }
       
-      // Stripeのチェックアウトセッションを作成するAPIを呼び出す
+      const stripe = await getStripe();
+      
+      if (!stripe) {
+        setError('決済システムの初期化に失敗しました。');
+        return;
+      }
+      
+      // サーバーサイドのAPIを呼び出してCheckoutセッションを作成
       const response = await fetch('/api/create-checkout-session', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          items: [
-            {
-              name: product.name,
-              description: product.description || '',
-              images: productImages && productImages.length > 0 ? productImages : [],
-              price: purchaseType === 'subscription' && product.subscriptionPrice 
-                ? product.subscriptionPrice 
-                : product.price,
-              quantity: 1
-            }
-          ],
-          purchaseType,
+          productId: product.id,
+          productName: product.name,
+          productImage: product.images[0],
+          price: purchaseType === 'subscription' && product.isSubscription 
+            ? product.subscriptionPrice 
+            : product.price,
+          isSubscription: purchaseType === 'subscription' && product.isSubscription,
+          userId: user?.id || 'anonymous',
         }),
       });
-
+      
       if (!response.ok) {
-        let errorMessage = '決済セッションの作成に失敗しました';
-        try {
-          const errorData = await response.json();
-          if (errorData && errorData.error) {
-            errorMessage = errorData.error;
-          }
-        } catch (err) {
-          // JSONのパースに失敗した場合はデフォルトのエラーメッセージを使用
-        }
-        throw new Error(errorMessage);
-      }
-
-      const data = await response.json();
-      if (!data || !data.sessionId) {
-        throw new Error('セッションIDが取得できませんでした');
+        const errorData = await response.json();
+        throw new Error(errorData.message || '決済セッションの作成に失敗しました');
       }
       
-      console.log('セッションID取得完了:', data.sessionId);
-      console.log('Stripe初期化を開始します...');
+      const session = await response.json();
       
-      // Stripeのチェックアウトページに遷移
-      const stripe = await getStripe();
-      if (!stripe) {
-        throw new Error('Stripeの初期化に失敗しました。ブラウザの設定を確認してください。');
-      }
-      
-      console.log('Stripe初期化完了、チェックアウトページへリダイレクトします...');
-      
+      // Stripeにリダイレクト
       const result = await stripe.redirectToCheckout({
-        sessionId: data.sessionId,
+        sessionId: session.id,
       });
       
       if (result.error) {
-        console.error('リダイレクトエラー:', result.error);
-        throw new Error(result.error.message || 'チェックアウトページへのリダイレクトに失敗しました');
+        setError(result.error.message || '決済処理中にエラーが発生しました');
       }
-    } catch (error: any) {
-      console.error('決済エラー:', error);
-      setError(`決済処理中にエラーが発生しました: ${error.message || ''}`);
+    } catch (error) {
+      console.error('チェックアウトエラー:', error);
+      setError(error instanceof Error ? error.message : '決済処理中に問題が発生しました');
+    } finally {
       setIsLoading(false);
     }
   };
+  
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex justify-center items-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+  
+  if (!product) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex justify-center items-center">
+        <div className="bg-white p-10 rounded-lg shadow text-center">
+          <h1 className="text-2xl font-bold text-gray-800 mb-4">商品が見つかりません</h1>
+          <p className="text-gray-600 mb-6">お探しの商品は存在しないか、削除された可能性があります。</p>
+          <button
+            onClick={() => router.push('/products')}
+            className="bg-primary text-white px-6 py-2 rounded-md hover:bg-indigo-700 transition-colors"
+          >
+            商品一覧に戻る
+          </button>
+        </div>
+      </div>
+    );
+  }
   
   return (
     <div className="bg-gray-50 py-12">
       <div className="container mx-auto px-4">
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
           <div className="flex flex-col md:flex-row">
-            {/* 画像ギャラリー */}
-            <div className="md:w-1/2 p-6">
-              <div className="relative h-96 w-full mb-4">
+            {/* 商品画像 */}
+            <div className="md:w-1/2">
+              <div className="relative h-96 w-full">
                 <Image
                   src={product.images[activeImageIndex]}
                   alt={product.name}
                   fill
-                  style={{ objectFit: 'cover' }}
-                  className="rounded-lg"
+                  className="object-contain"
                 />
               </div>
               
+              {/* サムネイル画像選択 */}
               {product.images.length > 1 && (
-                <div className="flex space-x-2">
+                <div className="flex justify-center mt-4 space-x-4 px-4">
                   {product.images.map((image, index) => (
-                    <button
+                    <div
                       key={index}
-                      onClick={() => setActiveImageIndex(index)}
-                      className={`relative h-20 w-20 rounded-md overflow-hidden border-2 ${
-                        activeImageIndex === index ? 'border-primary' : 'border-transparent'
+                      className={`h-16 w-16 cursor-pointer border-2 ${
+                        index === activeImageIndex ? 'border-primary' : 'border-gray-200'
                       }`}
+                      onClick={() => setActiveImageIndex(index)}
                     >
-                      <Image
-                        src={image}
-                        alt={`${product.name} - イメージ ${index + 1}`}
-                        fill
-                        style={{ objectFit: 'cover' }}
-                      />
-                    </button>
+                      <div className="relative h-full w-full">
+                        <Image
+                          src={image}
+                          alt={`${product.name} - 画像 ${index + 1}`}
+                          fill
+                          className="object-cover"
+                        />
+                      </div>
+                    </div>
                   ))}
                 </div>
               )}
@@ -241,53 +248,79 @@ export default function ProductDetail() {
                 </p>
               </div>
               
+              {/* 購入タイプ選択（サブスクリプション or 一括購入） */}
               {product.isSubscription && (
                 <div className="mb-6">
                   <h2 className="text-xl font-bold mb-2">購入タイプ</h2>
                   <div className="flex space-x-4">
-                    <button
-                      onClick={() => setPurchaseType('one-time')}
-                      className={`px-4 py-2 border rounded-md ${
-                        purchaseType === 'one-time'
-                          ? 'bg-primary text-white border-primary'
-                          : 'bg-white text-gray-700 border-gray-300 hover:border-primary'
-                      }`}
-                    >
-                      単品購入
-                    </button>
-                    <button
-                      onClick={() => setPurchaseType('subscription')}
-                      className={`px-4 py-2 border rounded-md ${
-                        purchaseType === 'subscription'
-                          ? 'bg-primary text-white border-primary'
-                          : 'bg-white text-gray-700 border-gray-300 hover:border-primary'
-                      }`}
-                    >
-                      定期購入
-                    </button>
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        name="purchase-type"
+                        checked={purchaseType === 'one-time'}
+                        onChange={() => setPurchaseType('one-time')}
+                        className="h-4 w-4 text-primary focus:ring-primary border-gray-300"
+                      />
+                      <span className="ml-2 text-gray-700">一回購入</span>
+                    </label>
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        name="purchase-type"
+                        checked={purchaseType === 'subscription'}
+                        onChange={() => setPurchaseType('subscription')}
+                        className="h-4 w-4 text-primary focus:ring-primary border-gray-300"
+                      />
+                      <span className="ml-2 text-gray-700">定期購入</span>
+                    </label>
                   </div>
                 </div>
               )}
               
+              {/* エラーメッセージ */}
               {error && (
-                <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+                <div className="mb-6 p-4 bg-red-50 text-red-800 rounded-md">
                   {error}
                 </div>
               )}
               
+              {/* 購入ボタン */}
               <button
                 onClick={handleCheckout}
                 disabled={isLoading || product.stock <= 0}
-                className={`w-full bg-primary text-white py-3 px-6 rounded-md shadow hover:bg-opacity-90 transition ${
-                  isLoading ? 'opacity-70 cursor-not-allowed' : ''
-                } ${product.stock <= 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`w-full py-3 px-6 text-white font-semibold rounded-md transition-colors ${
+                  product.stock <= 0
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : isLoading
+                    ? 'bg-indigo-300 cursor-wait'
+                    : 'bg-primary hover:bg-indigo-700'
+                }`}
               >
-                {isLoading ? '処理中...' : product.stock <= 0 ? '在庫切れ' : '購入する'}
+                {isLoading
+                  ? '処理中...'
+                  : product.stock <= 0
+                  ? '在庫切れ'
+                  : '購入する'}
               </button>
               
+              {/* サインインプロンプト */}
               {!user && (
-                <p className="text-sm text-gray-600 mt-2 text-center">
-                  購入するには、まずログインしてください。
+                <p className="mt-4 text-sm text-gray-600">
+                  注文履歴を確認するには、
+                  <button
+                    onClick={() => router.push('/login')}
+                    className="text-primary hover:underline"
+                  >
+                    ログイン
+                  </button>
+                  または
+                  <button
+                    onClick={() => router.push('/register')}
+                    className="text-primary hover:underline"
+                  >
+                    会員登録
+                  </button>
+                  してください。
                 </p>
               )}
             </div>
