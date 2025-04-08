@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import Link from 'next/link';
 
 export default function AuthCallback() {
   const router = useRouter();
@@ -11,98 +12,94 @@ export default function AuthCallback() {
   const [processing, setProcessing] = useState(true);
 
   useEffect(() => {
-    const handleCallback = async () => {
+    // エラーパラメータがある場合はエラーを表示
+    const errorParam = searchParams.get('error');
+    const errorDescription = searchParams.get('error_description');
+    
+    if (errorParam) {
+      console.error('認証エラー:', errorParam, errorDescription);
+      setError(errorDescription || 'メール認証中にエラーが発生しました。');
+      setProcessing(false);
+      return;
+    }
+
+    // Supabaseセッションの確立を処理
+    const handleAuthCallback = async () => {
       try {
-        // URLパラメータからコードを取得
-        const code = searchParams.get('code');
-        const errorParam = searchParams.get('error');
-        const errorDescription = searchParams.get('error_description');
-
-        if (errorParam) {
-          console.error('認証エラー:', errorParam, errorDescription);
-          setError(errorDescription || 'エラーが発生しました');
-          setProcessing(false);
-          return;
-        }
-
-        if (!code) {
-          // コードがない場合はエラー
-          setError('認証コードがありません');
-          setProcessing(false);
-          return;
-        }
-
-        if (!supabase) {
-          setError('認証サービスが初期化されていません');
-          setProcessing(false);
-          return;
-        }
-
-        // codeパラメータでセッションを交換
-        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-
-        if (exchangeError) {
-          console.error('セッション交換エラー:', exchangeError);
-          setError('認証に失敗しました: ' + exchangeError.message);
-          setProcessing(false);
-          return;
-        }
-
-        // 認証成功
-        console.log('認証成功');
+        setProcessing(true);
         
-        // プロフィールページにリダイレクト
-        router.push('/profile');
-      } catch (e) {
-        console.error('認証処理エラー:', e);
-        setError('認証処理中にエラーが発生しました');
+        if (!supabase) {
+          throw new Error('Supabaseクライアントが初期化されていません');
+        }
+
+        // URLからセッション情報を取得
+        const { data, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          throw error;
+        }
+
+        if (data?.session) {
+          // 認証成功: プロフィールページにリダイレクト
+          router.push('/profile');
+        } else {
+          // セッションがない場合はログインページへ
+          router.push('/login');
+        }
+      } catch (err) {
+        console.error('認証コールバック処理エラー:', err);
+        setError('認証処理中にエラーが発生しました。再度お試しください。');
+      } finally {
         setProcessing(false);
       }
     };
 
-    handleCallback();
+    handleAuthCallback();
   }, [router, searchParams]);
 
-  // エラーメッセージ表示
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-md w-full space-y-8">
-          <div>
+      <div className="min-h-[500px] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gray-50">
+        <div className="max-w-md w-full space-y-8 bg-white p-10 rounded-lg shadow-md">
+          <div className="text-center">
+            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
+              <svg className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </div>
             <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
               認証エラー
             </h2>
-            <p className="mt-2 text-center text-sm text-red-600">
+            <p className="mt-2 text-center text-sm text-gray-600">
               {error}
             </p>
-          </div>
-          <div className="text-center">
-            <button
-              onClick={() => router.push('/login')}
-              className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              ログインページに戻る
-            </button>
+            <div className="mt-6">
+              <Link href="/login" className="font-medium text-primary hover:text-indigo-500">
+                ログインページに戻る
+              </Link>
+            </div>
           </div>
         </div>
       </div>
     );
   }
 
-  // 処理中の表示
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
+    <div className="min-h-[500px] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gray-50">
+      <div className="max-w-md w-full space-y-8 bg-white p-10 rounded-lg shadow-md">
+        <div className="text-center">
+          <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-indigo-100">
+            <svg className="h-6 w-6 text-indigo-600 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+          </div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            認証処理中
+            認証処理中...
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            お待ちください...
+            ログイン情報を確認しています。しばらくお待ちください。
           </p>
-        </div>
-        <div className="flex justify-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
         </div>
       </div>
     </div>

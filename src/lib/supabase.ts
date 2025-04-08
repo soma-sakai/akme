@@ -11,19 +11,28 @@ const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const devFallbackUrl = 'https://qsobqueatozrxjjgrrfx.supabase.co';
 const devFallbackKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFzb2JxdWVhdG96cnhqamdycmZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDM2ODY1MzEsImV4cCI6MjA1OTI2MjUzMX0.cTdfnqPsD1F-0Aht0uuZlJEA6GPzWf7eyqh3oE5gcVo';
 
-// デプロイ環境に応じたサイトURL
-const getSiteUrl = () => {
-  if (typeof window !== 'undefined') {
-    // クライアントサイドでは現在のオリジンを使用
-    return window.location.origin;
-  }
-  // サーバーサイドでは環境変数を使用
-  return process.env.NEXT_PUBLIC_SITE_URL || 'https://akamee-six.vercel.app';
-};
-
 // 環境チェック
 const isDevelopment = process.env.NODE_ENV === 'development';
 const isClient = typeof window !== 'undefined';
+
+// サイトURLの取得 (リダイレクト用)
+const getSiteUrl = () => {
+  // 優先順位: 環境変数 > window.location.origin > デフォルト値
+  if (process.env.NEXT_PUBLIC_SITE_URL) {
+    return process.env.NEXT_PUBLIC_SITE_URL;
+  }
+  
+  // クライアントサイドでは現在のオリジンを使用
+  if (isClient && window.location.origin) {
+    return window.location.origin;
+  }
+  
+  // デフォルト値
+  return isDevelopment ? 'http://localhost:3000' : 'https://akamee-six.vercel.app';
+};
+
+// サイトURL
+const siteUrl = getSiteUrl();
 
 // ブラウザ環境でのフォールバック（window.__SUPABASE_CONFIG__経由で設定される可能性がある）
 const getBrowserEnv = () => {
@@ -54,12 +63,10 @@ if (!url || !key) {
 // ログ出力 (開発環境のみ)
 if (isDevelopment) {
   console.log(`環境: ${process.env.NODE_ENV}, クライアント: ${isClient}`);
+  console.log(`サイトURL: ${siteUrl}`);
   console.log(`Supabase URL: ${url ? url.substring(0, 15) + '...' : 'not set'}`);
   console.log(`Supabase Key: ${key ? key.substring(0, 15) + '...' : 'not set'}`);
 }
-
-// サイトURL (メール認証リンク用)
-const siteUrl = getSiteUrl();
 
 // 初期化オプション
 const options = {
@@ -67,17 +74,14 @@ const options = {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
-    // メール認証設定
-    redirectTo: `${siteUrl}/auth/callback`,
+    // 環境に応じたリダイレクトURLを設定
+    redirectTo: `${siteUrl}/auth/callback`
   }
 };
 
-// ログ出力
-console.log(`Supabase Auth リダイレクト先: ${options.auth.redirectTo}`);
-
 // グローバル変数にSupabase設定を追加（クライアントサイドで使用）
 if (isClient && url && key) {
-  window.__SUPABASE_CONFIG__ = { url, key };
+  window.__SUPABASE_CONFIG__ = { url, key, siteUrl };
 }
 
 // Supabaseクライアントの初期化
@@ -152,6 +156,7 @@ declare global {
     __SUPABASE_CONFIG__?: {
       url: string;
       key: string;
+      siteUrl?: string;
     };
   }
 } 

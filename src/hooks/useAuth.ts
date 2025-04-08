@@ -170,14 +170,15 @@ export const useAuth = () => {
     }
     
     try {
-      // サイトURLを動的に取得（クライアントサイドの場合）
-      const redirectTo = typeof window !== 'undefined' 
-        ? `${window.location.origin}/auth/callback` 
-        : `${process.env.NEXT_PUBLIC_SITE_URL || 'https://akamee-six.vercel.app'}/auth/callback`;
+      // サイトURLを取得（supabase.tsで設定したものを使用）
+      let redirectTo: string | undefined = undefined;
+      if (typeof window !== 'undefined' && window.__SUPABASE_CONFIG__?.siteUrl) {
+        redirectTo = `${window.__SUPABASE_CONFIG__.siteUrl}/auth/callback`;
+      }
       
-      console.log('サインアップ時のリダイレクト先:', redirectTo);
+      console.log('サインアップ時のリダイレクトURL:', redirectTo);
       
-      // メール確認付きのサインアップ
+      // メール確認用のサインアップ
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -186,6 +187,7 @@ export const useAuth = () => {
             name,
             address
           },
+          // メール確認後のリダイレクトURLを指定
           emailRedirectTo: redirectTo
         }
       });
