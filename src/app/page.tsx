@@ -5,21 +5,33 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Product } from '@/types/product';
 import { fetchProductsFromSupabase } from '@/lib/products';
+import ProductCard from '@/components/ProductCard';
 
 export default function Home() {
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   // 商品データを取得
   useEffect(() => {
     const fetchProducts = async () => {
       try {
         setLoading(true);
+        setError('');
+        console.log('トップページ: Supabaseからデータ取得を開始します');
         const products = await fetchProductsFromSupabase();
-        // 人気商品を3つ選択（ここでは単純に最初の3つを表示）
-        setFeaturedProducts(products.slice(0, 3));
+        console.log('トップページ: 取得した商品データ:', products);
+
+        if (products && products.length > 0) {
+          setFeaturedProducts(products);
+          console.log('商品データを正常に設定しました:', products);
+        } else {
+          console.warn('商品データが取得できませんでした');
+          setError('商品データを読み込めませんでした。');
+        }
       } catch (error) {
         console.error('商品データの取得に失敗しました:', error);
+        setError('商品データの取得中にエラーが発生しました。');
       } finally {
         setLoading(false);
       }
@@ -78,36 +90,18 @@ export default function Home() {
             </div>
           ) : (
             <>
+              {error && (
+                <div className="mb-6 p-4 bg-yellow-50 text-yellow-800 rounded-md text-center">
+                  {error}
+                </div>
+              )}
+              
               {featuredProducts.length === 0 ? (
-                <p className="text-center text-gray-500">商品の読み込みに失敗しました。</p>
+                <p className="text-center text-gray-500">表示できる商品がありません。</p>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                   {featuredProducts.map(product => (
-                    <div key={product.id} className="bg-white rounded-lg shadow-md overflow-hidden">
-                      <Link href={`/products/${product.id}`}>
-                        <div className="relative h-64 w-full">
-                          <Image
-                            src={product.images[0]}
-                            alt={product.name}
-                            fill
-                            className="object-cover"
-                          />
-                        </div>
-                      </Link>
-                      <div className="p-6">
-                        <h3 className="text-xl font-bold mb-2">{product.name}</h3>
-                        <p className="text-gray-600 mb-4 line-clamp-2">{product.description}</p>
-                        <div className="flex justify-between items-center">
-                          <span className="text-xl font-bold text-primary">{formatPrice(product.price)}</span>
-                          <Link 
-                            href={`/products/${product.id}`} 
-                            className="bg-primary text-white py-2 px-4 rounded hover:bg-opacity-90 transition"
-                          >
-                            詳細を見る
-                          </Link>
-                        </div>
-                      </div>
-                    </div>
+                    <ProductCard key={product.id} product={product} />
                   ))}
                 </div>
               )}
