@@ -3,7 +3,7 @@
 import { useState, Suspense, useEffect } from 'react';
 import { useAuthContext } from '@/contexts/AuthContext';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { getSupabaseStatusMessage, isSupabaseAvailable } from '@/lib/supabase';
 
 // SearchParamsを使用するコンポーネント
@@ -15,8 +15,10 @@ function LoginContent() {
   const [supabaseAvailable, setSupabaseAvailable] = useState(true);
   
   const { signIn } = useAuthContext();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const registrationSuccess = searchParams.get('registration') === 'success';
+  const returnUrl = searchParams.get('returnUrl') || '/profile';
   
   // Supabaseの可用性をチェック
   useEffect(() => {
@@ -44,6 +46,10 @@ function LoginContent() {
       
       if (!result.success) {
         setError(result.error || 'ログインに失敗しました。');
+      } else {
+        // ログイン成功時、returnUrlにリダイレクト
+        console.log(`ログイン成功: ${returnUrl}にリダイレクト`);
+        router.push(returnUrl);
       }
     } catch (error) {
       setError('ログイン処理中にエラーが発生しました。');
@@ -63,6 +69,11 @@ function LoginContent() {
           {registrationSuccess && (
             <div className="mt-3 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded">
               会員登録が完了しました。登録したメールアドレスとパスワードでログインしてください。
+            </div>
+          )}
+          {returnUrl && returnUrl !== '/profile' && (
+            <div className="mt-3 bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded">
+              購入を続けるにはログインが必要です。
             </div>
           )}
           {error && (
@@ -110,7 +121,7 @@ function LoginContent() {
           <div className="flex items-center justify-between">
             <div className="text-sm">
               <Link
-                href="/register"
+                href={`/register${returnUrl && returnUrl !== '/profile' ? `?returnUrl=${encodeURIComponent(returnUrl)}` : ''}`}
                 className="font-medium text-primary hover:text-indigo-500"
               >
                 アカウントをお持ちでない方はこちら

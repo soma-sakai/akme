@@ -111,6 +111,14 @@ export default function ProductDetail() {
   const handleCheckout = async () => {
     if (!product) return;
     
+    // ログインしていなければログインページにリダイレクト
+    if (!user) {
+      // 現在のURLをクエリパラメータとして渡し、ログイン後にリダイレクトできるようにする
+      const returnUrl = encodeURIComponent(`/products/${id}`);
+      router.push(`/login?returnUrl=${returnUrl}`);
+      return;
+    }
+    
     try {
       setIsLoading(true);
       setError('');
@@ -150,7 +158,7 @@ export default function ProductDetail() {
         productImage: imageUrl,
         price: selectedPrice,
         isSubscription: purchaseType === 'subscription' && product.isSubscription,
-        userId: user?.id || 'anonymous',
+        userId: user.id, // 匿名ユーザーIDは使用しない
       };
       
       console.log('APIリクエストデータ:', requestData);
@@ -356,27 +364,29 @@ export default function ProductDetail() {
                   ? '処理中...'
                   : product.stock <= 0
                   ? '在庫切れ'
-                  : '購入する'}
+                  : user
+                  ? '購入する'
+                  : 'ログインして購入'}
               </button>
               
               {/* サインインプロンプト */}
               {!user && (
-                <p className="mt-4 text-sm text-gray-600">
-                  注文履歴を確認するには、
+                <p className="mt-4 text-sm text-gray-600 text-center">
+                  購入するには、
                   <button
                     onClick={() => router.push('/login')}
-                    className="text-primary hover:underline"
+                    className="text-primary hover:underline font-medium"
                   >
                     ログイン
                   </button>
                   または
                   <button
                     onClick={() => router.push('/register')}
-                    className="text-primary hover:underline"
+                    className="text-primary hover:underline font-medium"
                   >
                     会員登録
                   </button>
-                  してください。
+                  が必要です。
                 </p>
               )}
             </div>
