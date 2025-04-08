@@ -35,3 +35,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# データ（商品・会員情報）
+/src/data/products.ts
+/src/data/users.ts
+/src/data/orders.ts
+/supabase/data
+
+# バックアップファイル
+*.bak

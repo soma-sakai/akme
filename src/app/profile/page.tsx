@@ -4,9 +4,10 @@ import { useState, useEffect } from 'react';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { formatDate, formatPrice } from '@/lib/utils';
 
 export default function Profile() {
-  const { user, loading, updateProfile } = useAuthContext();
+  const { user, loading, orders, ordersLoading, updateProfile, getOrderHistory } = useAuthContext();
   const router = useRouter();
   
   const [name, setName] = useState('');
@@ -25,8 +26,11 @@ export default function Profile() {
       setName(user.name || '');
       setAddress(user.address || '');
       setBio(user.bio || '');
+      
+      // 注文履歴を取得
+      getOrderHistory();
     }
-  }, [user, loading, router]);
+  }, [user, loading, router, getOrderHistory]);
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -183,9 +187,56 @@ export default function Profile() {
           </div>
           
           <div className="p-6">
-            <p className="text-gray-600 text-center py-8">
-              注文履歴はまだありません。
-            </p>
+            {ordersLoading ? (
+              <div className="text-center py-8">
+                <p>注文履歴を読み込み中...</p>
+              </div>
+            ) : orders.length > 0 ? (
+              <div className="space-y-6">
+                {orders.map((order) => (
+                  <div key={order.id} className="border rounded-lg overflow-hidden">
+                    <div className="bg-gray-50 p-4 border-b">
+                      <div className="flex justify-between flex-wrap gap-2">
+                        <div>
+                          <p className="text-sm text-gray-500">注文番号: {order.id.slice(-8)}</p>
+                          <p className="text-sm text-gray-500">注文日: {formatDate(order.created_at)}</p>
+                        </div>
+                        <div>
+                          <span className={`inline-block px-2 py-1 rounded text-xs font-medium
+                            ${order.status === 'completed' ? 'bg-green-100 text-green-800' : 
+                              order.status === 'processing' ? 'bg-blue-100 text-blue-800' : 
+                              order.status === 'cancelled' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>
+                            {order.status === 'completed' ? '完了' : 
+                             order.status === 'processing' ? '処理中' : 
+                             order.status === 'cancelled' ? 'キャンセル' : order.status}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="p-4">
+                      {order.items.map((item) => (
+                        <div key={item.id} className="py-2 flex justify-between border-b last:border-b-0">
+                          <div>
+                            <p className="font-medium">{item.name}</p>
+                            <p className="text-sm text-gray-500">数量: {item.quantity}</p>
+                          </div>
+                          <div className="text-right">
+                            <p>{formatPrice(item.price * item.quantity)}</p>
+                          </div>
+                        </div>
+                      ))}
+                      <div className="mt-4 text-right font-bold">
+                        合計: {formatPrice(order.total)}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-600 text-center py-8">
+                注文履歴はまだありません。
+              </p>
+            )}
           </div>
         </div>
       </div>

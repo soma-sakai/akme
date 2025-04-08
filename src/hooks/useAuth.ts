@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase, isSupabaseAvailable } from '@/lib/supabase';
+import { supabase, isSupabaseAvailable, fetchUserProfile, fetchOrderHistory } from '@/lib/supabase';
 
 // ユーザー情報の型定義
 export type UserProfile = {
@@ -14,12 +14,70 @@ export type UserProfile = {
   bio?: string;
 };
 
+// 注文履歴の型定義
+export type OrderItem = {
+  id: string;
+  product_id: string;
+  name: string;
+  price: number;
+  quantity: number;
+};
+
+export type Order = {
+  id: string;
+  status: string;
+  total: number;
+  created_at: string;
+  items: OrderItem[];
+};
+
 // 認証ロジック
 export const useAuth = () => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
   const [supabaseAvailable, setSupabaseAvailable] = useState(false);
   const router = useRouter();
+
+  // ユーザープロファイルを取得する関数
+  const fetchProfile = async (userId: string) => {
+    try {
+      if (!supabase) return null;
+      
+      // プロファイルテーブルからデータを取得
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+      
+      if (error) {
+        console.error('プロファイル取得エラー:', error);
+        return null;
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('プロファイル取得中にエラーが発生しました:', error);
+      return null;
+    }
+  };
+
+  // 注文履歴を取得する関数
+  const getOrderHistory = async () => {
+    if (!user) return;
+    
+    setOrdersLoading(true);
+    try {
+      const orderHistory = await fetchOrderHistory(user.id);
+      setOrders(orderHistory);
+    } catch (error) {
+      console.error('注文履歴の取得に失敗しました:', error);
+    } finally {
+      setOrdersLoading(false);
+    }
+  };
 
   useEffect(() => {
     // Supabaseが利用可能かチェック
@@ -44,13 +102,21 @@ export const useAuth = () => {
         const { data: { session } } = await supabase.auth.getSession();
         
         if (session?.user) {
+          // プロファイル情報を取得
+          const profile = await fetchProfile(session.user.id);
+          
           // ユーザー基本情報をセット
           setUser({
             id: session.user.id,
             email: session.user.email || '',
-            name: session.user.user_metadata?.name || localStorage.getItem(`name_${session.user.id}`) || '',
-            address: session.user.user_metadata?.address || localStorage.getItem(`address_${session.user.id}`) || '',
+            name: profile?.name || session.user.user_metadata?.name || '',
+            address: profile?.address || session.user.user_metadata?.address || '',
+            profile_image: profile?.avatar_url,
           });
+          
+          // 注文履歴を取得
+          const orderHistory = await fetchOrderHistory(session.user.id);
+          setOrders(orderHistory);
         }
       } catch (error) {
         console.error('セッション取得エラー:', error);
@@ -68,15 +134,24 @@ export const useAuth = () => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (event === 'SIGNED_IN' && session) {
+          // プロファイル情報を取得
+          const profile = await fetchProfile(session.user.id);
+          
           // サインイン時にユーザー情報をセット
           setUser({
             id: session.user.id,
             email: session.user.email || '',
-            name: session.user.user_metadata?.name || localStorage.getItem(`name_${session.user.id}`) || '',
-            address: session.user.user_metadata?.address || localStorage.getItem(`address_${session.user.id}`) || '',
+            name: profile?.name || session.user.user_metadata?.name || '',
+            address: profile?.address || session.user.user_metadata?.address || '',
+            profile_image: profile?.avatar_url,
           });
+          
+          // 注文履歴を取得
+          const orderHistory = await fetchOrderHistory(session.user.id);
+          setOrders(orderHistory);
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
+          setOrders([]);
         }
       }
     );
@@ -112,11 +187,20 @@ export const useAuth = () => {
       }
 
       if (data.user) {
-        // メタデータをローカルストレージに保存
-        localStorage.setItem(`name_${data.user.id}`, name);
-        localStorage.setItem(`address_${data.user.id}`, address);
-        
         if (data.session) {
+          // プロファイル情報が自動的に作成されなかった場合、明示的に作成
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .upsert({
+              id: data.user.id,
+              name,
+              address
+            });
+            
+          if (profileError) {
+            console.error('プロファイル作成エラー:', profileError);
+          }
+          
           // セッションがある場合は直接ログイン状態
           setUser({
             id: data.user.id,
@@ -173,21 +257,21 @@ export const useAuth = () => {
       }
 
       if (data.user) {
-        // メタデータからユーザー情報を取得
-        const userName = data.user.user_metadata?.name || localStorage.getItem(`name_${data.user.id}`) || '';
-        const userAddress = data.user.user_metadata?.address || localStorage.getItem(`address_${data.user.id}`) || '';
+        // プロファイル情報を取得
+        const profile = await fetchProfile(data.user.id);
         
         // ユーザー情報をセット
         setUser({
           id: data.user.id,
           email: data.user.email || '',
-          name: userName,
-          address: userAddress,
+          name: profile?.name || data.user.user_metadata?.name || '',
+          address: profile?.address || data.user.user_metadata?.address || '',
+          profile_image: profile?.avatar_url,
         });
 
-        // ローカルストレージにも保存
-        if (userName) localStorage.setItem(`name_${data.user.id}`, userName);
-        if (userAddress) localStorage.setItem(`address_${data.user.id}`, userAddress);
+        // 注文履歴を取得
+        const orderHistory = await fetchOrderHistory(data.user.id);
+        setOrders(orderHistory);
 
         router.push('/profile');
       }
@@ -211,27 +295,18 @@ export const useAuth = () => {
     }
     
     try {
-      // ログアウト前にユーザー情報をクリアする
-      setUser(null);
-      
-      // Supabaseセッション削除
+      // ログアウト処理
       const { error } = await supabase.auth.signOut();
       
       if (error) {
         throw error;
       }
       
-      // ローカルストレージのクリーンアップ
-      if (typeof window !== 'undefined') {
-        // ユーザー関連の情報をすべて削除
-        Object.keys(localStorage).forEach(key => {
-          if (key.startsWith('name_') || key.startsWith('address_')) {
-            localStorage.removeItem(key);
-          }
-        });
-      }
+      // 状態をクリア
+      setUser(null);
+      setOrders([]);
       
-      // 明示的にホームにリダイレクト
+      // ホームページにリダイレクト
       router.push('/');
       
       return { success: true };
@@ -254,13 +329,17 @@ export const useAuth = () => {
     }
 
     try {
-      // ローカルストレージに保存
-      if (profile.name) {
-        localStorage.setItem(`name_${user.id}`, profile.name);
-      }
-      if (profile.address) {
-        localStorage.setItem(`address_${user.id}`, profile.address);
-      }
+      // Supabaseのプロファイルテーブルを更新
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .upsert({
+          id: user.id,
+          name: profile.name || user.name,
+          address: profile.address || user.address,
+          updated_at: new Date().toISOString()
+        });
+
+      if (profileError) throw profileError;
 
       // Supabaseのユーザーメタデータを更新
       const { error } = await supabase.auth.updateUser({
@@ -288,9 +367,12 @@ export const useAuth = () => {
   return {
     user,
     loading,
+    orders,
+    ordersLoading,
     signUp,
     signIn,
     signOut,
-    updateProfile
+    updateProfile,
+    getOrderHistory
   };
 }; 
